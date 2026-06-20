@@ -1,0 +1,17 @@
+# Environment variables — API keys yahan hain, GitHub par KABHI push mat karo
+.env
+
+# Node modules — yeh npm install se dobara ban jata hai
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

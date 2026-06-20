@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI – University of Layyah Assistant</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- UL Logo as Favicon — assets/ul-logo.png rakho -->
+  <link rel="icon" type="image/png" href="assets/ul-logo.png" />
+  <link rel="shortcut icon" href="assets/ul-logo.png" />
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <!-- UL Logo: assets/ul-logo.png rakho, nahi mila to "UL" text dikhega -->
+          <img src="assets/ul-logo.png" alt="UL" class="logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+          <span class="logo-fallback">UL</span>
+        </div>
+        <span class="logo-text">UL AI</span>
+      </div>
+      <button class="icon-btn" id="newChatBtn" title="New Chat">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      </button>
+    </div>
+
+    <div class="sidebar-section-label">Recent Chats</div>
+    <div class="chat-history" id="chatHistory"></div>
+
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="themeToggle" title="Toggle Theme">
+        <span class="theme-icon">🌙</span>
+        <span>Dark Mode</span>
+      </button>
+      <button class="settings-btn-side" id="settingsBtn">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+        Settings
+      </button>
+      <div class="sidebar-info">
+        <div class="info-badge">ul.edu.pk</div>
+        <span>University of Layyah</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="icon-btn sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <span class="topbar-title">University of Layyah AI Assistant</span>
+      <div class="topbar-badge">Beta</div>
+    </header>
+
+    <!-- CHAT AREA -->
+    <div class="chat-container" id="chatContainer">
+
+      <!-- WELCOME -->
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-logo">
+          <img src="assets/ul-logo.png" alt="UL" class="welcome-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+          <span class="welcome-logo-text" style="display:none">UL</span>
+        </div>
+        <h1 class="welcome-title">UL AI Assistant</h1>
+        <p class="welcome-sub">Your intelligent guide to the <strong>University of Layyah</strong></p>
+        
+        <!-- <div class="suggestion-list">
+          <button class="suggestion-chip" onclick="sendSuggestion('Admission process at University of Layyah?')">
+            🎓 Admission process at University of Layyah?'
+          </button>
+          <button class="suggestion-chip" onclick="sendSuggestion('What departments are offered at ul.edu.pk?')">
+            🏛️ What departments are offered at ul.edu.pk?
+          </button>
+          <button class="suggestion-chip" onclick="sendSuggestion('Fee structure at University of Layyah 2026?')">
+            💰 Fee structure at University of Layyah 2026?
+          </button>
+          <button class="suggestion-chip" onclick="sendSuggestion('How to contact University of Layyah?')">
+            📞 How to contact University of Layyah?
+          </button>
+          <button class="suggestion-chip" onclick="sendSuggestion('Scholarships available at University of Layyah?')">
+            🏆 Scholarships available at University of Layyah?
+          </button>
+          <button class="suggestion-chip" onclick="sendSuggestion('Campus facilities at University of Layyah?')">
+          🏫 Campus facilities at University of Layyah?
+          </button>
+        </div>   -->
+        <div class="suggestion-grid">
+          <button class="suggestion-card" onclick="sendSuggestion('Admission process at University of Layyah?')">
+            <span class="suggestion-icon">🎓</span><span>Admission Process</span>
+          </button>
+          <button class="suggestion-card" onclick="sendSuggestion('What departments are offered at ul.edu.pk?')">
+            <span class="suggestion-icon">🏛️</span><span>Departments</span>
+          </button>
+          <button class="suggestion-card" onclick="sendSuggestion('Fee structure at University of Layyah 2026?')">
+            <span class="suggestion-icon">💰</span><span>Fee Structure</span>
+          </button>
+          <button class="suggestion-card" onclick="sendSuggestion('How to contact University of Layyah?')">
+            <span class="suggestion-icon">📞</span><span>Contact Info</span>
+          </button>
+          <button class="suggestion-card" onclick="sendSuggestion('Scholarships available at University of Layyah?')">
+            <span class="suggestion-icon">🏆</span><span>Scholarships</span>
+          </button>
+          <button class="suggestion-card" onclick="sendSuggestion('Campus facilities at University of Layyah?')">
+            <span class="suggestion-icon">🏫</span><span>Campus & Facilities</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div class="messages" id="messages"></div>
+    </div>
+
+    <!-- INPUT AREA -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <button class="input-icon-btn" title="Attach (coming soon)" disabled>
+          <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+        </button>
+        <textarea
+          id="messageInput"
+          class="message-input"
+          placeholder="Ask anything about University of Layyah..."
+        ></textarea>
+        <button class="send-btn" id="sendBtn" title="Send (Enter)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </div>
+      <p class="input-hint">UL AI may make mistakes. Verify important info at <a href="https://ul.edu.pk" target="_blank">ul.edu.pk</a> &nbsp;·&nbsp; Press <kbd>Enter</kbd> to send, <kbd>Shift+Enter</kbd> for new line</p>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== SETTINGS MODAL ===== -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+        Settings
+      </div>
+      <button class="modal-close" id="closeSettings">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="setting-row">
+        <label>Theme</label>
+        <button class="theme-toggle inline" id="themeToggle2">
+          <span class="theme-icon">🌙</span> Toggle Dark/Light
+        </button>
+      </div>
+
+      <div class="modal-divider"></div>
+
+      <!-- About Section directly in Settings -->
+      <div class="about-body" style="padding: 0;">
+        <div class="about-logo" style="margin-top: 4px;">
+          <img src="assets/ul-logo.png" alt="UL" class="about-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+          <span class="about-logo-text" style="display:none">UL</span>
+        </div>
+        <h2 class="about-uni-name">University of Layyah</h2>
+        <p class="about-tagline">Knowledge • Innovation • Excellence</p>
+
+        <div class="about-grid">
+          <div class="about-card">
+            <div class="about-card-icon">🌐</div>
+            <div class="about-card-label">Website</div>
+            <a href="https://ul.edu.pk" target="_blank" class="about-card-value">ul.edu.pk</a>
+          </div>
+          <div class="about-card">
+            <div class="about-card-icon">📍</div>
+            <div class="about-card-label">Location</div>
+            <div class="about-card-value">Layyah, Punjab, Pakistan</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-icon">🏛️</div>
+            <div class="about-card-label">Type</div>
+            <div class="about-card-value">Public University</div>
+          </div>
+          <div class="about-card">
+            <div class="about-card-icon">🎓</div>
+            <div class="about-card-label">Affiliation</div>
+            <div class="about-card-value">HEC Pakistan</div>
+          </div>
+        </div>
+
+        <div class="about-section">
+          <div class="about-section-title">Departments</div>
+          <div class="about-tags">
+            <span class="tag">Computer Science</span>
+            <span class="tag">Mathematics</span>
+            <span class="tag">Physics</span>
+            <span class="tag">Chemistry</span>
+            <span class="tag">Botany</span>
+            <span class="tag">Zoology</span>
+            <span class="tag">English</span>
+            <span class="tag">Urdu</span>
+            <span class="tag">Islamic Studies</span>
+            <span class="tag">Commerce</span>
+            <span class="tag">Education</span>
+            <span class="tag">Sport Science/span>
+          </div>
+        </div>
+
+        <div class="about-section">
+          <div class="about-section-title">About UL AI</div>
+          <p class="about-desc">UL AI is an intelligent assistant built specifically for University of Layyah students, faculty, and visitors. Powered by Google Gemini, it answers queries about admissions, departments, fees, scholarships, and campus life.</p>
+        </div>
+
+        <div class="about-version">UL AI v1.0 &nbsp;·&nbsp; Powered by Gemini</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ABOUT MODAL ===== -->
+<div class="modal-overlay" id="aboutModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">ℹ️ About University of Layyah</div>
+      <button class="modal-close" id="closeAbout">✕</button>
+    </div>
+    <div class="modal-body about-body">
+      <div class="about-logo">
+        <img src="assets/ul-logo.png" alt="UL" class="about-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+        <span class="about-logo-text" style="display:none">UL</span>
+      </div>
+      <h2 class="about-uni-name">University of Layyah</h2>
+      <p class="about-tagline">Knowledge • Innovation • Excellence</p>
+
+      <div class="about-grid">
+        <div class="about-card">
+          <div class="about-card-icon">🌐</div>
+          <div class="about-card-label">Website</div>
+          <a href="https://ul.edu.pk" target="_blank" class="about-card-value">ul.edu.pk</a>
+        </div>
+        <div class="about-card">
+          <div class="about-card-icon">📍</div>
+          <div class="about-card-label">Location</div>
+          <div class="about-card-value">Layyah, Punjab, Pakistan</div>
+        </div>
+        <div class="about-card">
+          <div class="about-card-icon">🏛️</div>
+          <div class="about-card-label">Type</div>
+          <div class="about-card-value">Public University</div>
+        </div>
+        <div class="about-card">
+          <div class="about-card-icon">🎓</div>
+          <div class="about-card-label">Affiliation</div>
+          <div class="about-card-value">HEC Pakistan</div>
+        </div>
+      </div>
+
+      <div class="about-section">
+        <div class="about-section-title">Departments</div>
+        <div class="about-tags">
+          <span class="tag">Computer Science</span>
+          <span class="tag">Mathematics</span>
+          <span class="tag">Physics</span>
+          <span class="tag">Chemistry</span>
+          <span class="tag">Botany</span>
+          <span class="tag">Zoology</span>
+          <span class="tag">English</span>
+          <span class="tag">Urdu</span>
+          <span class="tag">Islamic Studies</span>
+          <span class="tag">Commerce</span>
+          <span class="tag">Education</span>
+        </div>
+      </div>
+
+      <div class="about-section">
+        <div class="about-section-title">About UL AI</div>
+        <p class="about-desc">UL AI is an intelligent assistant built specifically for University of Layyah students, faculty, and visitors. It answers queries about admissions, departments, fees, scholarships, and campus life.</p>
+      </div>
+
+      <div class="about-version">UL AI v1.0 &nbsp;·&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  // Settings modal theme toggle
+  document.getElementById("themeToggle2").addEventListener("click", () => {
+    document.getElementById("themeToggle").click();
+  });
+</script>
+</body>
+</html>

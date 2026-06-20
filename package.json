@@ -1,0 +1,30 @@
+{
+  "name": "ul-chatbot",
+  "version": "1.0.0",
+  "description": "UL AI Assistant is an intelligent university chatbot designed to provide instant, accurate, and user-friendly answers to questions related to admissions, academics, departments, scholarships, campus facilities, and student services at the University of Layyah.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node ul-ai/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/naeemsec/ul-ai-assistant.git"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/naeemsec/ul-ai-assistant/issues"
+  },
+  "homepage": "https://github.com/naeemsec/ul-ai-assistant#readme"
+}

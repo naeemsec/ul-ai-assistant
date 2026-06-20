@@ -1,6 +1,4 @@
 // ===== CONFIGURATION =====
-// NOTE: API key aur university context ab backend (server.js) mein hain — secure!
-// Frontend sirf /api/chat endpoint ko call karta hai.
 const CONFIG = {
   maxTokens: 1024,
 };
@@ -446,7 +444,6 @@ function setSendMode() {
   sendBtn.disabled = false;
 }
 
-// ===== SEND MESSAGE =====
 // ===== SEND MESSAGE =====
 async function handleSend() {
   const text = messageInput.value.trim();

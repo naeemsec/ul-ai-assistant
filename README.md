@@ -52,7 +52,7 @@ ul-ai-assistant/
 │   ├── index.html       # Application structure
 │   ├── style.css        # Styling and themes
 │   └── server.js        # Backend server (API logic)
-├── .env.example          # Environment variable template
+├── .env
 ├── .gitignore
 ├── package.json
 └── README.md

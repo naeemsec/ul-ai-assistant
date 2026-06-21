@@ -127,6 +127,7 @@
           id="messageInput"
           class="message-input"
           placeholder="Ask anything about University of Layyah..."
+          oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,220)+'px'; this.style.overflowY = this.scrollHeight>220 ? 'auto' : 'hidden';"
         ></textarea>
         <button class="send-btn" id="sendBtn" title="Send (Enter)">
           <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -181,7 +182,7 @@
           <div class="about-card">
             <div class="about-card-icon">🏛️</div>
             <div class="about-card-label">Type</div>
-            <div class="about-card-value">Public University</div>
+            <div class="about-card-value">Government University</div>
           </div>
           <div class="about-card">
             <div class="about-card-icon">🎓</div>

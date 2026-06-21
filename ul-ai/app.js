@@ -1,4 +1,6 @@
 // ===== CONFIGURATION =====
+// NOTE: API key aur university context ab backend (server.js) mein hain — secure!
+// Frontend sirf /api/chat endpoint ko call karta hai.
 const CONFIG = {
   maxTokens: 1024,
 };
@@ -265,20 +267,54 @@ function showWelcome(show) {
 function renderMessage(role, content) {
   const div = document.createElement("div");
   div.className = `message ${role}`;
- 
+
   const avatar = document.createElement("div");
   avatar.className = "avatar";
   avatar.textContent = role === "user" ? "U" : "UL";
- 
+
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.innerHTML = formatText(content);
- 
+
   div.appendChild(avatar);
   div.appendChild(bubble);
+
+  // Sirf AI messages ke liye copy button
+  if (role === "ai") {
+    div.appendChild(createCopyButton(content));
+  }
+
   messagesEl.appendChild(div);
   scrollToBottom();
   return div;
+}
+
+// ===== COPY BUTTON =====
+function createCopyButton(textContent) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg-actions";
+
+  const btn = document.createElement("button");
+  btn.className = "copy-btn";
+  btn.title = "Copy";
+  btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(textContent);
+      btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>`;
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+        btn.classList.remove("copied");
+      }, 1500);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  });
+
+  wrap.appendChild(btn);
+  return wrap;
 }
  
 // ===== TYPEWRITER EFFECT (word-by-word, fast) =====
@@ -308,6 +344,7 @@ function typewriterMessage(text) {
       if (stopRequested) {
         // Stop pe jo text abhi tak type hua hai wahi dikhao
         bubble.innerHTML = formatText(words.slice(0, i).join(""));
+        div.appendChild(createCopyButton(words.slice(0, i).join("")));
         currentTypewriterResolve = null;
         resolve();
         return;
@@ -320,6 +357,7 @@ function typewriterMessage(text) {
         setTimeout(typeWord, speed);
       } else {
         bubble.innerHTML = formatText(text);
+        div.appendChild(createCopyButton(text));
         currentTypewriterResolve = null;
         resolve();
       }
@@ -361,10 +399,41 @@ function formatText(text) {
   const lines = text.split("\n");
   let html = "";
   let inList = false;
- 
-  for (let i = 0; i < lines.length; i++) {
+  let i = 0;
+
+  while (i < lines.length) {
     let line = lines[i];
- 
+
+    // ===== TABLE DETECTION =====
+    // Pattern: | col | col | ... followed by |---|---| separator row
+    const isTableRow = /^\|.+\|$/.test(line.trim());
+    const nextLine = lines[i + 1] || "";
+    const isSeparatorNext = /^\|?[\s\-:|]+\|?$/.test(nextLine.trim()) && nextLine.includes("-");
+
+    if (isTableRow && isSeparatorNext) {
+      if (inList) { html += "</ul>"; inList = false; }
+
+      // Header row
+      const headerCells = line.trim().slice(1, -1).split("|").map(c => c.trim());
+      html += `<div class="table-wrap"><table class="md-table"><thead><tr>`;
+      headerCells.forEach(cell => { html += `<th>${inline(cell)}</th>`; });
+      html += `</tr></thead><tbody>`;
+
+      i += 2; // skip header + separator row
+
+      // Body rows
+      while (i < lines.length && /^\|.+\|$/.test(lines[i].trim())) {
+        const rowCells = lines[i].trim().slice(1, -1).split("|").map(c => c.trim());
+        html += `<tr>`;
+        rowCells.forEach(cell => { html += `<td>${inline(cell)}</td>`; });
+        html += `</tr>`;
+        i++;
+      }
+
+      html += `</tbody></table></div>`;
+      continue; // already advanced i, skip the i++ at loop end
+    }
+
     // Headings: ### ## #
     if (/^### (.+)/.test(line)) {
       if (inList) { html += "</ul>"; inList = false; }
@@ -401,8 +470,10 @@ function formatText(text) {
       if (inList) { html += "</ul>"; inList = false; }
       html += `<p>${inline(line)}</p>`;
     }
+
+    i++;
   }
- 
+
   if (inList) html += "</ul>";
   return html;
 }
@@ -444,6 +515,7 @@ function setSendMode() {
   sendBtn.disabled = false;
 }
 
+// ===== SEND MESSAGE =====
 // ===== SEND MESSAGE =====
 async function handleSend() {
   const text = messageInput.value.trim();
@@ -509,6 +581,32 @@ Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
 ---
 🔧 *Dev Info: ${msg}*`;
  
+    } else if (err.rateLimited) {
+      // ===== PER-IP RATE LIMIT — yeh tumhari apni limit hai, Gemini ki nahi =====
+      userMsg = `🐢 **Thora Aahista**
+
+Aapne thoray waqt mein bohat zyada messages bhej diye hain.
+
+Yeh limit isliye hai taake **sab students** UL AI use kar sakein — sirf ek hi user system busy na kar de.
+
+⏱️ Kuch minute ruk kar dobara try karein.`;
+
+    } else if (err.quotaExceeded) {
+      // ===== QUOTA EXCEEDED — reset time ke saath professional message =====
+      const resetTime = err.resetTimePKT || "midnight";
+      const hours = err.hoursRemaining;
+      const hoursText = hours ? ` (taqreeban **${hours} ghante** baad)` : "";
+
+      userMsg = `⏳ **Aaj Ki Limit Khatam Ho Gayi Hai**
+
+UL AI ki free daily limit abhi exceed ho gayi hai.
+
+🕐 Limit reset hogi: **${resetTime}** Pakistan time${hoursText}
+
+Us waqt ke baad dobara try karein, sab kuch normal kaam karega.
+
+> *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*`;
+
     } else if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
       userMsg = `⏳ **Thori Dair Baad Try Karein**
  
@@ -560,7 +658,18 @@ async function callGeminiAPI(messages) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || `Server Error ${response.status}`);
+    const error = new Error(data.error || `Server Error ${response.status}`);
+    // Quota info (agar backend ne bheja ho) error object ke saath attach karo
+    if (data.quotaExceeded) {
+      error.quotaExceeded = true;
+      error.resetTimePKT = data.resetTimePKT;
+      error.hoursRemaining = data.hoursRemaining;
+    }
+    // Per-IP rate limit info (alag se — yeh Gemini quota nahi, yeh apni personal limit hai)
+    if (data.rateLimited) {
+      error.rateLimited = true;
+    }
+    throw error;
   }
 
   return data.reply || "No response received.";
@@ -574,6 +683,16 @@ function sendSuggestion(text) {
  
 // ===== AUTO RESIZE TEXTAREA =====
 function autoResize(el) {
-  el.style.height = "0px";
-  el.style.height = el.scrollHeight + "px";
+  const maxHeight = 220; // CSS ke max-height se match hona chahiye
+
+  el.style.height = "auto";
+  const newHeight = el.scrollHeight;
+
+  if (newHeight > maxHeight) {
+    el.style.height = maxHeight + "px";
+    el.style.overflowY = "auto"; // limit cross hote hi scroll dikhao
+  } else {
+    el.style.height = newHeight + "px";
+    el.style.overflowY = "hidden"; // limit se neeche scrollbar mat dikhao
+  }
 }

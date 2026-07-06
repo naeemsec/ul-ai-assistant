@@ -89,7 +89,7 @@ ul-ai-assistant/
 
 4. Start the server
    ```bash
-   npm start
+   npm ul-ai/start
    ```
 
 5. Open your browser at `http://localhost:3000`

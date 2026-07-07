@@ -44,7 +44,7 @@ DEPARTMENTS & PROGRAMS (known):
 ADMISSIONS:
 - Admission is conducted through online portal at ul.edu.pk/admissions
 - Merit-based admissions following HEC guidelines
-- Documents needed: Matric and Inter (1st or 2nd year) certificates, CNIC/B-form, domicile, passport photos
+- Documents needed: Matric and Inter (2nd year) certificates, CNIC/B-form, domicile, passport photos
 - Admission usually opens once in a year in June-August for Fall semester
 - Steps for admissions
 - 1. Visit the Admission Portal. Go to the official admission portal at ul.edu.pk/admissions.
@@ -414,6 +414,11 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", model: GEMINI_MODEL });
+});
+
+// ===== Status =====
+app.get("/api/status", (req, res) => {
+  res.json({environment:process.env.NODE_ENV === "production" ? "production" : "development"});
 });
  
 app.listen(PORT, () => {

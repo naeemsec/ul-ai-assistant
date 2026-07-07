@@ -16,6 +16,7 @@ let currentTypewriterResolve = null;
  
 // ===== DOM REFS =====
 const sidebar        = document.getElementById("sidebar");
+const sidebarBackdrop = document.getElementById("sidebarBackdrop");
 const sidebarToggle  = document.getElementById("sidebarToggle");
 const newChatBtn     = document.getElementById("newChatBtn");
 const themeToggle    = document.getElementById("themeToggle");
@@ -45,7 +46,14 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSessions();
   setupEventListeners();
   autoResize(document.getElementById("messageInput"));
- 
+  updateEnvironmentBadge();
+
+  // Mobile pe sidebar default collapsed (64px strip), Desktop pe expanded
+  if (window.innerWidth <= 768) {
+    sidebar.classList.add("collapsed");
+  }
+  // Desktop pe koi collapsed class nahi — already expanded by default
+
   // BUG FIX: Tab switch pe naya chat mat banao — pehla existing session restore karo
   if (chatSessions.length > 0) {
     currentSessionId = chatSessions[0].id;
@@ -56,8 +64,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
  
+async function updateEnvironmentBadge() {
+  console.log("updateEnvironmentBadge called");
+    const badge = document.getElementById("topbarBadge");
+    if (!badge) return;
+    try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        badge.textContent = data.environment === "production" ? "Live" : "Beta";
+    } catch (e) {
+        badge.textContent = "Beta";
+    }
+}
 function setupEventListeners() {
   sidebarToggle.addEventListener("click", toggleSidebar);
+  sidebarBackdrop.addEventListener("click", toggleSidebar); // backdrop tap karne se sidebar band ho jaye
   newChatBtn.addEventListener("click", startNewChat);
   themeToggle.addEventListener("click", toggleTheme);
   sendBtn.addEventListener("click", () => {
@@ -70,10 +91,13 @@ function setupEventListeners() {
   settingsBtn.addEventListener("click", () => settingsModal.classList.add("open"));
   closeSettings.addEventListener("click", () => settingsModal.classList.remove("open"));
   closeAbout.addEventListener("click", () => aboutModal.classList.remove("open"));
-  openAboutBtn.addEventListener("click", () => {
-    settingsModal.classList.remove("open");
-    aboutModal.classList.add("open");
-  });
+  
+  if (openAboutBtn) {
+    openAboutBtn.addEventListener("click", () => {
+        settingsModal.classList.remove("open");
+        aboutModal.classList.add("open");
+    });
+  }
  
   // Close modals on backdrop click
   settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("open"); });
@@ -97,7 +121,37 @@ function setupEventListeners() {
 // ===== SIDEBAR =====
 function toggleSidebar() {
   sidebar.classList.toggle("collapsed");
+
+  // Mobile pe: jab expanded (not collapsed) to backdrop show karo
+  if (window.innerWidth <= 768) {
+    const isExpanded = !sidebar.classList.contains("collapsed");
+    if (isExpanded) {
+      sidebarBackdrop.classList.add("active");
+    } else {
+      sidebarBackdrop.classList.remove("active");
+    }
+  } else {
+    sidebarBackdrop.classList.remove("active");
+  }
 }
+
+function closeSidebarMobile() {
+  // Sirf mobile width pe sidebar ko force-close karta hai (chat select karne ke baad)
+  if (window.innerWidth <= 768) {
+    sidebar.classList.add("collapsed");
+    sidebarBackdrop.classList.remove("active");
+  }
+}
+
+// ===== RESIZE SAFETY =====
+// Agar window resize ho (ya DevTools mein device switch ho), backdrop ki
+// "active" state ko hamesha current width ke mutabiq sahi rakho.
+// Desktop width pe backdrop kabhi active nahi rehna chahiye.
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 768) {
+    sidebarBackdrop.classList.remove("active");
+  }
+});
  
 // ===== THEME =====
 function toggleTheme() {
@@ -128,6 +182,7 @@ function startNewChat() {
     clearMessages();
     showWelcome(true);
     messageInput.focus();
+    closeSidebarMobile();
     return;
   }
  
@@ -140,6 +195,7 @@ function startNewChat() {
   clearMessages();
   showWelcome(true);
   messageInput.focus();
+  closeSidebarMobile();
 }
  
 function switchSession(id) {
@@ -153,6 +209,7 @@ function switchSession(id) {
     showWelcome(true);
   }
   renderHistory();
+  closeSidebarMobile(); // mobile pe chat select karne ke baad sidebar khud band ho jaye
 }
  
 function getSession() {
@@ -265,12 +322,16 @@ function showWelcome(show) {
 }
  
 function renderMessage(role, content) {
+  // Role normalize karo: "assistant" (Gemini/session storage convention)
+  // aur "ai" (humara internal naam) dono ko same treat karo.
+  const normalizedRole = (role === "assistant") ? "ai" : role;
+
   const div = document.createElement("div");
-  div.className = `message ${role}`;
+  div.className = `message ${normalizedRole}`;
 
   const avatar = document.createElement("div");
   avatar.className = "avatar";
-  avatar.textContent = role === "user" ? "U" : "UL";
+  avatar.textContent = normalizedRole === "user" ? "U" : "UL";
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -280,7 +341,7 @@ function renderMessage(role, content) {
   div.appendChild(bubble);
 
   // Sirf AI messages ke liye copy button
-  if (role === "ai") {
+  if (normalizedRole === "ai") {
     div.appendChild(createCopyButton(content));
   }
 

@@ -69,9 +69,56 @@ body {
   z-index: 100;
 }
 
+/* ===== DESKTOP: Collapsed = thin icon rail (line jaisi, sirf icons visible) ===== */
 .sidebar.collapsed {
-  width: 0;
-  transform: translateX(-260px);
+  width: 64px;
+}
+
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .sidebar-section-label,
+.sidebar.collapsed .chat-history,
+.sidebar.collapsed .theme-toggle span:last-child,
+.sidebar.collapsed .settings-btn-side span,
+.sidebar.collapsed .sidebar-info span,
+.sidebar.collapsed .info-badge {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0;
+}
+
+.sidebar.collapsed .logo {
+  gap: 0;
+}
+
+.sidebar.collapsed .sidebar-header-actions {
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.sidebar.collapsed #newChatBtn {
+  margin: 0;
+}
+
+.sidebar.collapsed .sidebar-footer {
+  align-items: center;
+}
+
+.sidebar.collapsed .theme-toggle,
+.sidebar.collapsed .settings-btn-side {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-info {
+  justify-content: center;
+  padding: 6px 0;
 }
 
 .sidebar-header {
@@ -81,7 +128,11 @@ body {
   padding: 16px;
   border-bottom: 1px solid var(--border);
 }
-
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .logo {
   display: flex;
   align-items: center;
@@ -548,10 +599,263 @@ body {
 }
 
 /* ===== RESPONSIVE ===== */
-@media (max-width: 600px) {
-  .suggestion-grid { grid-template-columns: repeat(2, 1fr); }
-  .sidebar { position: fixed; top: 0; left: 0; height: 100%; }
-  .sidebar.collapsed { transform: translateX(-100%); width: var(--sidebar-width); }
+/* ======================================================================
+   RESPONSIVE DESIGN — Mobile & Tablet
+   ====================================================================== */
+
+/* ===== SIDEBAR BACKDROP (mobile overlay jab sidebar khulta hai) ===== */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 90;
+  opacity: 0;
+  transition: opacity var(--transition);
+  pointer-events: none; /* default mein clicks block na kare */
+}
+
+/* SAFETY NET: ".active" class sirf 768px aur usse neeche kaam karegi.
+   Desktop pe chahe JS kabhi galti se "active" class laga de, CSS yahan
+   usay override kar dega — backdrop kabhi desktop pe screen block nahi karega. */
+@media (max-width: 768px) {
+  .sidebar-backdrop.active {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ===== TABLET & BELOW (768px) ===== */
+@media (max-width: 768px) {
+  /* Mobile: sidebar always visible as thin strip (64px), 
+     expanded state slides full overlay */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 64px;
+    transform: translateX(0);
+    z-index: 100;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  /* Collapsed on mobile = thin 64px strip always visible */
+  .sidebar.collapsed {
+    width: 64px;
+    transform: translateX(0);
+  }
+
+  /* Expanded on mobile = full overlay */
+  .sidebar:not(.collapsed) {
+    width: 280px;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Main shifts right to account for the 64px strip */
+  .main {
+    width: calc(100% - 64px);
+    margin-left: 64px;
+  }
+
+  .suggestion-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .topbar-title {
+    font-size: 14px;
+  }
+
+  .welcome-title {
+    font-size: 22px;
+  }
+
+  .welcome-sub {
+    font-size: 13.5px;
+    padding: 0 10px;
+  }
+
+  .messages {
+    padding: 12px;
+  }
+
+  .bubble {
+    max-width: 85%;
+    font-size: 14px;
+  }
+
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal {
+    width: 92%;
+    max-height: 88vh;
+  }
+}
+
+/* ===== MOBILE PHONES (480px and below) ===== */
+@media (max-width: 480px) {
+  .sidebar.collapsed {
+    width: 64px;
+    max-width: 64px;
+  }
+
+  .sidebar:not(.collapsed) {
+    width: 85%;
+    max-width: 300px;
+  }
+
+  .main {
+    width: calc(100% - 64px);
+    margin-left: 64px;
+  }
+
+  .topbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .topbar-title {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+
+  .welcome-screen {
+    padding: 30px 14px 20px;
+  }
+
+  .welcome-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .welcome-title {
+    font-size: 19px;
+  }
+
+  .suggestion-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .suggestion-card {
+    padding: 12px 8px;
+    font-size: 11.5px;
+  }
+
+  .suggestion-icon {
+    font-size: 18px;
+  }
+
+  .messages {
+    padding: 10px;
+    gap: 14px;
+  }
+
+  .message {
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+
+  .bubble {
+    max-width: 80%;
+    font-size: 13.5px;
+    padding: 10px 13px;
+  }
+
+  .md-table {
+    font-size: 12px;
+  }
+
+  .md-table th, .md-table td {
+    padding: 6px 8px;
+  }
+
+  .input-area {
+    padding: 10px 10px 8px;
+  }
+
+  .input-wrapper {
+    padding: 8px 8px 8px 12px;
+  }
+
+  .message-input {
+    font-size: 14px;
+  }
+
+  .send-btn, .input-icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .input-hint {
+    font-size: 10px;
+    line-height: 1.5;
+    padding: 0 6px;
+  }
+
+  .msg-actions {
+    margin-left: 38px;
+  }
+
+  /* Modals fully mobile-friendly */
+  .modal {
+    width: 94%;
+    border-radius: 12px;
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .about-card {
+    padding: 10px;
+  }
+
+  .about-tags {
+    gap: 5px;
+  }
+
+  .tag {
+    font-size: 10.5px;
+    padding: 2px 8px;
+  }
+}
+
+/* ===== VERY SMALL SCREENS (360px and below) ===== */
+@media (max-width: 360px) {
+  .suggestion-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-sub strong {
+    display: block;
+  }
+
+  .bubble {
+    max-width: 88%;
+    font-size: 13px;
+  }
 }
 
 /* ===== HISTORY ITEM WITH MENU ===== */
@@ -1033,4 +1337,53 @@ select.setting-input { cursor: pointer; }
 
 .copy-btn.copied {
   color: var(--success);
+}
+/* ===== MOBILE ICON STRIP — collapsed sidebar pe icons centered ===== */
+@media (max-width: 768px) {
+  /* Strip mein sirf icons, text hide */
+  .sidebar.collapsed .logo-text,
+  .sidebar.collapsed .sidebar-section-label,
+  .sidebar.collapsed .chat-history,
+  .sidebar.collapsed .theme-toggle,
+  .sidebar.collapsed .sidebar-info {
+    display: none !important;
+  }
+
+  /* Settings btn — strip mein sirf icon dikhao */
+  .sidebar.collapsed .settings-btn-side span {
+    display: none;
+  }
+  .sidebar.collapsed .settings-btn-side {
+    width: 36px;
+    height: 36px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 10px;
+  }
+
+  /* Footer mein icons vertically stack ho jayein */
+  .sidebar.collapsed .sidebar-footer {
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 8px;
+  }
+
+  /* Header icons center */
+  .sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 0;
+  }
+
+  .sidebar.collapsed .sidebar-header-actions {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .sidebar.collapsed .logo {
+    justify-content: center;
+  }
 }

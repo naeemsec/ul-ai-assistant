@@ -283,6 +283,24 @@ BEHAVIOR GUIDELINES:
 - If you don't know a specific detail (like exact fee amounts), say so honestly and direct them to the official website.
 `;
 
+// ===== PDF CHAT — SYSTEM PROMPT (ab /api/pdf-chat endpoint isay use karta hai) =====
+const PDF_CHAT_SYSTEM_PROMPT = `
+You are UL AI Assistant's PDF Learning Assistant.
+Your job is to answer questions strictly using the uploaded PDF as the primary source of truth.
+
+When a user uploads a PDF:
+1. Understand the complete document before answering.
+2. Answer only from the PDF content whenever possible.
+3. If the answer is not available in the document, clearly state that the information is not present in the uploaded PDF instead of making assumptions.
+4. Explain concepts in a student-friendly manner with simple language.
+5. When appropriate, mention the relevant chapter, section, or page number.
+6. Generate concise summaries, detailed explanations, important points, definitions, examples, and exam-oriented notes upon request.
+7. Help students prepare for exams by identifying key concepts, repeated ideas, and likely important topics.
+8. Never fabricate information that does not exist in the uploaded document.
+9. Maintain an academic and professional tone.
+10. Your goal is to help students understand the document, not merely quote it.
+`;
+
 // ===== QUOTA RESET TIME CALCULATOR =====
 // Gemini free tier quota midnight PT (Pacific Time) par reset hota hai.
 // Yeh function woh exact instant nikal kar Pakistan Time (PKT) mein convert karta hai.
@@ -316,7 +334,7 @@ function getQuotaResetTime() {
  
 // ===== MIDDLEWARE =====
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "5mb" })); // PDF extracted text bhejne ke liye default 100kb limit kaafi nahi thi
 app.use(express.static(path.join(__dirname))); // index.html, style.css, app.js serve karega
  
 // ===== PER-IP RATE LIMITING (taake ek user spam kare to sab ke liye quota khatam na ho) =====
@@ -352,7 +370,7 @@ const dailyLimiter = rateLimit({
 // Frontend yahan POST request bhejega: { messages: [...] }
 app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, userName } = req.body;
  
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages array required" });
@@ -363,6 +381,12 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
       parts: [{ text: m.content }],
     }));
     const lastMsg = messages[messages.length - 1];
+
+    // User ka naam context mein add karo taake AI naturally use kare
+    const userNameNote = userName
+      ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
+      : "";
+    const contextWithName = UNIVERSITY_CONTEXT + userNameNote;
  
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
  
@@ -370,7 +394,7 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: UNIVERSITY_CONTEXT }] },
+        system_instruction: { parts: [{ text: contextWithName }] },
         contents: [...history, { role: "user", parts: [{ text: lastMsg.content }] }],
         generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
       }),
@@ -411,6 +435,76 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
   }
 });
  
+// ===== PDF CHAT ENDPOINT =====
+// Frontend yahan POST request bhejega: { messages: [...], pdfText: "..." }
+// pdfText client-side (pdf.js) se extract hoke aata hai — server pe koi file store nahi hoti.
+app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
+  try {
+    const { messages, pdfText, userName } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "messages array required" });
+    }
+    if (!pdfText || typeof pdfText !== "string" || pdfText.trim().length === 0) {
+      return res.status(400).json({ error: "pdfText required" });
+    }
+
+    const history = messages.slice(0, -1).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+    const lastMsg = messages[messages.length - 1];
+
+    // Server-side safety cap bhi lagao (client-side cap ke ilawa — defense in depth)
+    const MAX_PDF_CHARS = 60000;
+    const safePdfText = pdfText.length > MAX_PDF_CHARS ? pdfText.slice(0, MAX_PDF_CHARS) : pdfText;
+
+    const systemInstruction = `${PDF_CHAT_SYSTEM_PROMPT}\n\n=== UPLOADED PDF CONTENT (extracted text) ===\n${safePdfText}\n=== END OF PDF CONTENT ===`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [...history, { role: "user", parts: [{ text: lastMsg.content }] }],
+        generationConfig: { maxOutputTokens: 2048, temperature: 0.4 },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("[Gemini PDF Chat Error]", data);
+      const msg = data.error?.message || `API Error ${response.status}`;
+
+      const isQuotaError =
+        response.status === 429 ||
+        msg.toLowerCase().includes("quota") ||
+        msg.toLowerCase().includes("rate limit");
+
+      if (isQuotaError) {
+        const resetInfo = getQuotaResetTime();
+        return res.status(429).json({
+          error: msg,
+          quotaExceeded: true,
+          resetTimePKT: resetInfo.formatted,
+          hoursRemaining: resetInfo.hoursRemaining,
+        });
+      }
+
+      return res.status(response.status).json({ error: msg });
+    }
+
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
+    res.json({ reply });
+  } catch (err) {
+    console.error("[Server Error - PDF Chat]", err);
+    res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", model: GEMINI_MODEL });
@@ -424,4 +518,3 @@ app.get("/api/status", (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ UL AI server chal raha hai: http://localhost:${PORT}`);
 });
- 

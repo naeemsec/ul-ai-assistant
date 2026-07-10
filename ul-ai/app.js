@@ -13,6 +13,7 @@ let isLoading = false;
 let activeContextMenu = null;
 let stopRequested = false;
 let currentTypewriterResolve = null;
+let userName = localStorage.getItem("ul_ai_username") || "";
  
 // ===== DOM REFS =====
 const sidebar        = document.getElementById("sidebar");
@@ -31,6 +32,23 @@ const aboutModal     = document.getElementById("aboutModal");
 const closeSettings  = document.getElementById("closeSettings");
 const closeAbout     = document.getElementById("closeAbout");
 const openAboutBtn   = document.getElementById("openAboutBtn");
+const pdfChatBtn     = document.getElementById("pdfChatBtn");
+const pdfChatScreen  = document.getElementById("pdfChatScreen");
+const attachBtn      = document.getElementById("attachBtn");
+const pdfFileInput   = document.getElementById("pdfFileInput");
+const attachedFileChip = document.getElementById("attachedFileChip");
+
+// ===== PDF CHAT STATE =====
+let pdfChatMode = false;
+let attachedPdfFile = null;
+let attachedPdfText = null;
+let isExtractingPdf = false;
+let pdfChatMessages = []; // PDF chat ka apna alag messages store — normal sessions se bilkul alag
+
+// pdf.js worker setup (CDN se load hui hai)
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
  
 // const ta = document.getElementById("messageInput");
 
@@ -62,6 +80,19 @@ document.addEventListener("DOMContentLoaded", () => {
     // Pehli baar open — sirf welcome show karo, empty chat mat banao
     showWelcome(true);
   }
+
+  // Agar naam nahi pata to naam pucho
+  if (!userName) {
+    setTimeout(() => showNameDialog(), 600);
+  } else {
+    updateWelcomeGreeting();
+  }
+
+  // User badge init
+  updateUserBadge();
+  document.getElementById("userBadge").addEventListener("click", () => {
+    showNameDialog();
+  });
 });
  
 async function updateEnvironmentBadge() {
@@ -116,6 +147,200 @@ function setupEventListeners() {
       if (!isLoading) handleSend();
     }
   });
+
+  // ===== FEATURE NAV BUTTONS (Past Paper Analyzer / Smart Notes+Quiz / GPA Calculator — coming soon) =====
+  document.querySelectorAll(".feature-btn:not(#pdfChatBtn)").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      showToast(`🚧 ${btn.dataset.feature} — currently working on it! Jald hi available hoga.`);
+    });
+  });
+
+  // ===== PDF CHAT BUTTON =====
+  pdfChatBtn.addEventListener("click", enterPdfChatMode);
+
+  // ===== ATTACH (PDF) BUTTON =====
+  attachBtn.addEventListener("click", () => pdfFileInput.click());
+
+  pdfFileInput.addEventListener("change", async () => {
+    const file = pdfFileInput.files[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      showToast("⚠️ Sirf PDF files allowed hain.");
+      pdfFileInput.value = "";
+      return;
+    }
+
+    attachedPdfFile = file;
+    attachedPdfText = null;
+    showAttachedFile(file);
+
+    // Agar guidelines screen abhi khuli hai to hata do
+    if (pdfChatMode) {
+      pdfChatScreen.classList.add("hidden");
+    }
+
+    isExtractingPdf = true;
+    setAttachedFileStatus("processing");
+    showToast("📄 PDF process ho rahi hai, thoda intezar karein...");
+
+    try {
+      const text = await extractPdfText(file);
+
+      if (!text || text.trim().length < 20) {
+        showToast("⚠️ Is PDF se text nahi mil saka — shayad ye scanned/image-based PDF hai.");
+        setAttachedFileStatus("error");
+        attachedPdfText = null;
+      } else {
+        // Safety cap — bohot lambi PDF ho to sirf shuru ka hissa bhejo (quota bachane ke liye)
+        const MAX_CHARS = 60000;
+        attachedPdfText = text.length > MAX_CHARS
+          ? text.slice(0, MAX_CHARS) + "\n\n[...PDF bohot lambi hai, sirf shuru ka hissa include kiya gaya hai...]"
+          : text;
+        setAttachedFileStatus("ready");
+        showToast(`✅ "${file.name}" ready hai — ab is PDF ke baare mein poochain!`);
+      }
+    } catch (err) {
+      console.error("[PDF Extract Error]", err);
+      showToast("⚠️ PDF process nahi ho saki. Dobara try karein.");
+      setAttachedFileStatus("error");
+      attachedPdfText = null;
+    }
+
+    isExtractingPdf = false;
+  });
+}
+
+// ===== PDF TEXT EXTRACTION (pdf.js, client-side) =====
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  let fullText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(item => item.str).join(" ");
+    fullText += `\n\n--- Page ${i} ---\n${pageText}`;
+  }
+  return fullText.trim();
+}
+
+// ===== PDF CHAT MODE =====
+function enterPdfChatMode() {
+  pdfChatMode = true;
+  clearMessages();
+  showWelcome(false);
+
+  // Pichli PDF chat messages restore karo (agar koi thi)
+  if (pdfChatMessages.length > 0) {
+    pdfChatScreen.classList.add("hidden"); // guidelines mat dikhao, messages dikhao
+    pdfChatMessages.forEach(m => renderMessage(m.role, m.content));
+    // Restart button dikhao (sirf PDF chat mein)
+    showPdfRestartBtn();
+  } else {
+    pdfChatScreen.classList.remove("hidden"); // pehli baar — guidelines dikhao
+  }
+
+  closeSidebarMobile();
+  messageInput.focus();
+
+  // Highlight PDF Chat button, hata do "Recent Chats" wali active highlight
+  pdfChatBtn.classList.add("active");
+  document.querySelectorAll(".history-item-wrap.active").forEach(el => el.classList.remove("active"));
+  messageInput.placeholder = "Ask anything about your PDF...";
+}
+
+function exitPdfChatMode() {
+  if (!pdfChatMode) return;
+  pdfChatMode = false;
+  pdfChatScreen.classList.add("hidden");
+  // Note: pdfChatMessages aur attachedPdf clear NAHI karte — wapas click pe restore honge
+  // Sirf UI reset karo
+  hidePdfRestartBtn();
+
+  // PDF Chat button ki highlight hatao, wapas current session ki highlight lagao
+  pdfChatBtn.classList.remove("active");
+  messageInput.placeholder = "Ask anything about University of Layyah...";
+  renderHistory();
+}
+
+function showPdfRestartBtn() {
+  let btn = document.getElementById("pdfRestartBtn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "pdfRestartBtn";
+    btn.className = "pdf-restart-btn";
+    btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> New PDF Chat`;
+    btn.addEventListener("click", resetPdfChat);
+    // Input area ke upar lagao
+    const inputArea = document.querySelector(".input-area");
+    inputArea.insertBefore(btn, inputArea.firstChild);
+  }
+  btn.style.display = "flex";
+}
+
+function hidePdfRestartBtn() {
+  const btn = document.getElementById("pdfRestartBtn");
+  if (btn) btn.style.display = "none";
+}
+
+function resetPdfChat() {
+  // PDF chat bilkul fresh start
+  pdfChatMessages = [];
+  clearMessages();
+  clearAttachedFile();
+  pdfChatScreen.classList.remove("hidden");
+  hidePdfRestartBtn();
+  messageInput.placeholder = "Ask anything about your PDF...";
+}
+
+function showAttachedFile(file) {
+  attachedFileChip.innerHTML = `
+    <span class="chip-icon">📄</span>
+    <span class="chip-name">${file.name}</span>
+    <span class="chip-status processing" id="chipStatus">Processing…</span>
+    <button class="chip-remove" id="removeAttachedFile" title="Remove">✕</button>
+  `;
+  attachedFileChip.classList.add("show");
+  document.getElementById("removeAttachedFile").addEventListener("click", clearAttachedFile);
+}
+
+function setAttachedFileStatus(status) {
+  const el = document.getElementById("chipStatus");
+  if (!el) return;
+  if (status === "processing") { el.textContent = "Processing…"; el.className = "chip-status processing"; }
+  else if (status === "ready") { el.textContent = "Ready"; el.className = "chip-status ready"; }
+  else if (status === "error") { el.textContent = "Error"; el.className = "chip-status error"; }
+}
+
+function clearAttachedFile() {
+  attachedPdfFile = null;
+  attachedPdfText = null;
+  isExtractingPdf = false;
+  pdfFileInput.value = "";
+  attachedFileChip.classList.remove("show");
+  attachedFileChip.innerHTML = "";
+}
+
+// ===== TOAST NOTIFICATION =====
+let toastTimeout = null;
+function showToast(message) {
+  let toast = document.getElementById("ulToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "ulToast";
+    toast.className = "ul-toast";
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+  toast.classList.add("show");
+
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2800);
 }
  
 // ===== SIDEBAR =====
@@ -162,6 +387,125 @@ function toggleTheme() {
   themeToggle.querySelector("span:last-child").textContent = isDark ? "Light Mode" : "Dark Mode";
 }
  
+// ===== USER NAME =====
+function showNameDialog() {
+  // Agar dialog already exist kare to skip
+  if (document.getElementById("nameDialog")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "nameDialog";
+  overlay.className = "modal-overlay open";
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <div class="modal-title">👋 Welcome to UL AI</div>
+      </div>
+      <div class="modal-body" style="padding:24px 20px">
+        <p style="margin-bottom:16px;color:var(--text-secondary);font-size:14px">
+          Please enter your name so I can address you personally:
+        </p>
+        <input 
+          type="text" 
+          id="nameInput" 
+          class="setting-input" 
+          placeholder="Enter your name here..." 
+          maxlength="30"
+          style="margin-bottom:16px"
+          autofocus
+        />
+        <button class="save-btn" id="saveNameBtn" style="width:100%">Start Session→</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = document.getElementById("nameInput");
+  const btn = document.getElementById("saveNameBtn");
+
+  function saveName() {
+    const name = input.value.trim();
+    if (!name) {
+      input.style.borderColor = "var(--accent)";
+      input.placeholder = "Naam zaroor likhein!";
+      input.focus();
+      return;
+    }
+    userName = name;
+    localStorage.setItem("ul_ai_username", name);
+    overlay.remove();
+    updateWelcomeGreeting();
+    updateUserBadge();
+  }
+
+  btn.addEventListener("click", saveName);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveName();
+  });
+  setTimeout(() => input.focus(), 100);
+}
+
+function updateWelcomeGreeting() {
+  const subEl = document.querySelector(".welcome-sub");
+  if (!subEl) return;
+
+  // welcome-sub as-is rehne do — neeche alag greeting element banao
+  let greetEl = document.getElementById("welcomeGreeting");
+  if (!greetEl) {
+    greetEl = document.createElement("p");
+    greetEl.id = "welcomeGreeting";
+    greetEl.className = "welcome-greeting";
+    subEl.insertAdjacentElement("afterend", greetEl);
+  }
+
+  const greetings = [
+    { before: "Kaise hain aap, ",  name: userName, after: "? 😊" },
+    { before: "Welcome back, ",    name: userName, after: "! 👋" },
+    { before: "Hello ",            name: userName, after: ", kya poochna hai? 🎓" },
+    { before: "Aaj main aapki kya madad kar sakta hoon, ", name: userName, after: "?" },
+  ];
+  const g = greetings[Math.floor(Math.random() * greetings.length)];
+  const fullText = g.before + g.name + g.after;
+  const nameStart = g.before.length;
+  const nameEnd   = nameStart + g.name.length;
+
+  greetEl.innerHTML = "";
+  let i = 0;
+  const speed = 40;
+
+  function typeChar() {
+    if (i < fullText.length) {
+      const typed = fullText.slice(0, i + 1);
+      if (i < nameStart) {
+        greetEl.innerHTML = typed + '<span class="cursor">|</span>';
+      } else if (i < nameEnd) {
+        greetEl.innerHTML = g.before + `<strong>${typed.slice(nameStart)}</strong>` + '<span class="cursor">|</span>';
+      } else {
+        greetEl.innerHTML = g.before + `<strong>${g.name}</strong>` + typed.slice(nameEnd) + '<span class="cursor">|</span>';
+      }
+      i++;
+      setTimeout(typeChar, speed);
+    } else {
+      // Typing done — cursor hatao
+      greetEl.innerHTML = g.before + `<strong>${g.name}</strong>` + g.after;
+    }
+  }
+
+  typeChar();
+}
+
+function getUserInitial() {
+  if (userName && userName.trim()) {
+    return userName.trim()[0].toUpperCase();
+  }
+  return "U";
+}
+
+function updateUserBadge() {
+  const el = document.getElementById("userBadgeName");
+  if (!el) return;
+  el.textContent = userName || "User";
+}
+
 // ===== CHAT SESSIONS =====
 function loadSessions() {
   try {
@@ -176,6 +520,8 @@ function saveSessions() {
 }
  
 function startNewChat() {
+  exitPdfChatMode();
+
   // Agar current session already empty hai to naya mat banao
   const existing = getSession();
   if (existing && existing.messages.length === 0) {
@@ -199,6 +545,7 @@ function startNewChat() {
 }
  
 function switchSession(id) {
+  exitPdfChatMode();
   currentSessionId = id;
   const session = getSession();
   clearMessages();
@@ -331,7 +678,7 @@ function renderMessage(role, content) {
 
   const avatar = document.createElement("div");
   avatar.className = "avatar";
-  avatar.textContent = normalizedRole === "user" ? "U" : "UL";
+  avatar.textContent = normalizedRole === "user" ? getUserInitial() : "UL";
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -582,6 +929,18 @@ async function handleSend() {
   const text = messageInput.value.trim();
   if (!text || isLoading) return;
 
+  // ===== PDF CHAT GUARDS =====
+  if (pdfChatMode) {
+    if (isExtractingPdf) {
+      showToast("⏳ PDF abhi process ho rahi hai, thoda intezar karein...");
+      return;
+    }
+    if (!attachedPdfText) {
+      showToast("📎 Pehle koi PDF attach karein.");
+      return;
+    }
+  }
+
   // Agar koi session nahi hai to naya banao
   if (!currentSessionId || !getSession()) {
     const id = Date.now().toString();
@@ -592,15 +951,21 @@ async function handleSend() {
     renderHistory();
   }
 
-  const session = getSession();
   showWelcome(false);
- 
-  session.messages.push({ role: "user", content: text });
-  renderMessage("user", text);
- 
-  if (session.messages.length === 1) {
-    session.title = text.length > 40 ? text.substring(0, 40) + "…" : text;
-    renderHistory();
+
+  // PDF mode mein alag messages array, normal session mein normal array
+  if (pdfChatMode) {
+    pdfChatMessages.push({ role: "user", content: text });
+    renderMessage("user", text);
+    showPdfRestartBtn();
+  } else {
+    const session = getSession();
+    session.messages.push({ role: "user", content: text });
+    renderMessage("user", text);
+    if (session.messages.length === 1) {
+      session.title = text.length > 40 ? text.substring(0, 40) + "…" : text;
+      renderHistory();
+    }
   }
  
   messageInput.value = "";
@@ -610,14 +975,22 @@ async function handleSend() {
   stopRequested = false;
   setStopMode();
   renderTyping();
-  saveSessions();
+
+  if (!pdfChatMode) saveSessions();
  
   try {
-    const reply = await callGeminiAPI(session.messages);
+    const reply = (pdfChatMode && attachedPdfText)
+      ? await callPdfChatAPI(pdfChatMessages, attachedPdfText)
+      : await callGeminiAPI(getSession().messages);
     removeTyping();
-    session.messages.push({ role: "assistant", content: reply });
+
+    if (pdfChatMode) {
+      pdfChatMessages.push({ role: "assistant", content: reply });
+    } else {
+      getSession().messages.push({ role: "assistant", content: reply });
+    }
     await typewriterMessage(reply);
-    saveSessions();
+    if (!pdfChatMode) saveSessions();
   } catch (err) {
     removeTyping();
  
@@ -698,9 +1071,13 @@ Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
 🔧 *Dev Info: ${msg}*`;
     }
  
-    session.messages.push({ role: "assistant", content: userMsg });
+    if (pdfChatMode) {
+      pdfChatMessages.push({ role: "assistant", content: userMsg });
+    } else {
+      getSession().messages.push({ role: "assistant", content: userMsg });
+      saveSessions();
+    }
     renderMessage("ai", userMsg);
-    saveSessions();
   }
  
   isLoading = false;
@@ -708,6 +1085,23 @@ Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
   messageInput.focus();
 }
  
+// ===== SAFE JSON PARSE (agar server se HTML/error page aa jaye to clear message de) =====
+async function parseJsonSafely(response) {
+  const raw = await response.text();
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    console.error("[Non-JSON Response]", raw.slice(0, 300));
+    throw new Error(
+      response.status === 413
+        ? "PDF/message bohot bara hai (payload limit cross ho gaya)."
+        : response.status === 404
+        ? "Server route nahi mila — server restart karna hoga."
+        : `Server ne unexpected response diya (status ${response.status}).`
+    );
+  }
+}
+
 // ===== BACKEND API CALL (Secure — API key backend mein chupi hai) =====
 async function callGeminiAPI(messages) {
   const response = await fetch("/api/chat", {
@@ -716,7 +1110,7 @@ async function callGeminiAPI(messages) {
     body: JSON.stringify({ messages })
   });
 
-  const data = await response.json();
+  const data = await parseJsonSafely(response);
 
   if (!response.ok) {
     const error = new Error(data.error || `Server Error ${response.status}`);
@@ -727,6 +1121,32 @@ async function callGeminiAPI(messages) {
       error.hoursRemaining = data.hoursRemaining;
     }
     // Per-IP rate limit info (alag se — yeh Gemini quota nahi, yeh apni personal limit hai)
+    if (data.rateLimited) {
+      error.rateLimited = true;
+    }
+    throw error;
+  }
+
+  return data.reply || "No response received.";
+}
+
+// ===== BACKEND API CALL — PDF CHAT (extracted PDF text + question) =====
+async function callPdfChatAPI(messages, pdfText) {
+  const response = await fetch("/api/pdf-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, pdfText })
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    const error = new Error(data.error || `Server Error ${response.status}`);
+    if (data.quotaExceeded) {
+      error.quotaExceeded = true;
+      error.resetTimePKT = data.resetTimePKT;
+      error.hoursRemaining = data.hoursRemaining;
+    }
     if (data.rateLimited) {
       error.rateLimited = true;
     }

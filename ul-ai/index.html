@@ -36,6 +36,25 @@
       </div>
     </div>
 
+    <div class="feature-nav" id="featureNav">
+      <button class="feature-btn" id="pdfChatBtn" data-feature="PDF Chat">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2v6h6"/></svg>
+        <span>PDF Chat</span>
+      </button>
+      <button class="feature-btn" id="pastPaperBtn" data-feature="Past Paper Analyzer">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M9 8h1M4 6a2 2 0 012-2h8l6 6v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/></svg>
+        <span>Past Paper Analyzer</span>
+      </button>
+      <button class="feature-btn" id="smartNotesBtn" data-feature="Smart Notes + Quiz Generator">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9M12 4h9M12 12h9M4.5 6.5l1.5 1.5 2.5-2.5M4.5 14.5l1.5 1.5 2.5-2.5"/></svg>
+        <span>Smart Notes + Quiz</span>
+      </button>
+      <button class="feature-btn" id="gpaCalcBtn" data-feature="GPA Calculator">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h8M8 10h1M12 10h1M16 10h1M8 14h1M12 14h1M16 14h1M8 18h1M12 18h1M16 18h1"/></svg>
+        <span>GPA Calculator</span>
+      </button>
+    </div>
+
     <div class="sidebar-section-label">Recent Chats</div>
     <div class="chat-history" id="chatHistory"></div>
 
@@ -61,7 +80,10 @@
     <!-- TOPBAR -->
     <header class="topbar">
       <span class="topbar-title">University of Layyah AI Assistant</span>
-      <div class="topbar-badge" id="topbarBadge">...</div>
+      <div class="topbar-right">
+        <button class="user-badge" id="userBadge" title="Change name">👤 <span id="userBadgeName">User</span></button>
+        <div class="topbar-badge" id="topbarBadge">...</div>
+      </div>
     </header>
 
     <!-- CHAT AREA -->
@@ -118,14 +140,42 @@
         </div>
       </div>
 
+      <!-- PDF CHAT GUIDELINES SCREEN -->
+      <div class="welcome-screen hidden" id="pdfChatScreen">
+        <div class="welcome-logo"><span style="font-size:44px">📄</span></div>
+        <h1 class="welcome-title">AI PDF Chat</h1>
+        <p class="welcome-sub">Upload any lecture slides, course notes, books, research papers, or handouts and let AI do the hard work for you.</p>
+
+        <p class="pdf-guide-desc">
+          With AI PDF Chat, you won't have to read hundreds of pages to find a single answer. Simply upload your PDF and ask questions in natural language. The AI will understand the document and provide accurate, context-aware answers based on its content.
+        </p>
+
+        <div class="pdf-guide-section-title">Key Capabilities</div>
+        <div class="pdf-guide-grid">
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">📚</span> Ask questions directly from your uploaded PDF.</div>
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">📝</span> Generate chapter-wise summaries and concise notes.</div>
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">🔑</span> Highlight important concepts, definitions, and key points.</div>
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">🎯</span> Extract exam-focused topics and frequently discussed concepts.</div>
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">❓</span> Instantly clarify difficult paragraphs or technical terms.</div>
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">🌐</span> Translate selected content into simpler language when needed.</div>
+          <div class="pdf-guide-item"><span class="pdf-guide-icon">📖</span> Navigate large documents without manually searching through pages.</div>
+        </div>
+
+        <p class="pdf-guide-footer">Whether it's a textbook, lecture slides, research paper, or class notes, AI PDF Chat transforms static documents into an interactive learning experience.</p>
+
+        <div class="pdf-guide-cta">👉 Click the 📎 attach icon below to upload your PDF and get started.</div>
+      </div>
+
       <!-- MESSAGES -->
       <div class="messages" id="messages"></div>
     </div>
 
     <!-- INPUT AREA -->
     <div class="input-area">
+      <div class="attached-file-chip" id="attachedFileChip"></div>
       <div class="input-wrapper">
-        <button class="input-icon-btn" title="Attach (coming soon)" disabled>
+        <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
+        <button class="input-icon-btn" id="attachBtn" title="Attach PDF">
           <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
         </button>
         <textarea
@@ -290,6 +340,8 @@
   </div>
 </div>
 
+<!-- pdf.js — client-side PDF text extraction ke liye (free, koi server storage nahi) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="app.js"></script>
 <script>
   // Settings modal theme toggle

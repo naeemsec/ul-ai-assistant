@@ -1,3 +1,20 @@
+// ===== DEVICE ID =====
+// Login system nahi hai, isliye har browser/device ko ek anonymous ID di jati hai
+// (localStorage mein persist hoti hai) taake backend har device ki apni alag, fair
+// rate limit rakh sake — chahay bohot saare students ek hi university WiFi/IP se hon.
+const DEVICE_ID_KEY = "ul_ai_device_id";
+
+function getDeviceId() {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
+
 // ===== CONFIGURATION =====
 // NOTE: API key aur university context ab backend (server.js) mein hain — secure!
 // Frontend sirf /api/chat endpoint ko call karta hai.
@@ -32,24 +49,8 @@ const aboutModal     = document.getElementById("aboutModal");
 const closeSettings  = document.getElementById("closeSettings");
 const closeAbout     = document.getElementById("closeAbout");
 const openAboutBtn   = document.getElementById("openAboutBtn");
-const pdfChatBtn     = document.getElementById("pdfChatBtn");
-const pdfChatScreen  = document.getElementById("pdfChatScreen");
-const attachBtn      = document.getElementById("attachBtn");
-const pdfFileInput   = document.getElementById("pdfFileInput");
-const attachedFileChip = document.getElementById("attachedFileChip");
+// NOTE: PDF Chat ke DOM refs, state, aur functions ab pdf-chat.js mein hain (alag file)
 
-// ===== PDF CHAT STATE =====
-let pdfChatMode = false;
-let attachedPdfFile = null;
-let attachedPdfText = null;
-let isExtractingPdf = false;
-let pdfChatMessages = []; // PDF chat ka apna alag messages store — normal sessions se bilkul alag
-
-// pdf.js worker setup (CDN se load hui hai)
-if (window.pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-}
- 
 // const ta = document.getElementById("messageInput");
 
 // ta.addEventListener("input", () => {
@@ -65,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   autoResize(document.getElementById("messageInput"));
   updateEnvironmentBadge();
+  loadInitialTokenUsage(); // token usage bar
 
   // Mobile pe sidebar default collapsed (64px strip), Desktop pe expanded
   if (window.innerWidth <= 768) {
@@ -151,179 +153,13 @@ function setupEventListeners() {
   // ===== FEATURE NAV BUTTONS (Past Paper Analyzer / Smart Notes+Quiz / GPA Calculator — coming soon) =====
   document.querySelectorAll(".feature-btn:not(#pdfChatBtn)").forEach((btn) => {
     btn.addEventListener("click", () => {
-      showToast(`🚧 ${btn.dataset.feature} — currently working on it! Jald hi available hoga.`);
+      showToast(`🚧 ${btn.dataset.feature} is currently under development. It will be available soon!`);
     });
   });
 
-  // ===== PDF CHAT BUTTON =====
-  pdfChatBtn.addEventListener("click", enterPdfChatMode);
-
-  // ===== ATTACH (PDF) BUTTON =====
-  attachBtn.addEventListener("click", () => pdfFileInput.click());
-
-  pdfFileInput.addEventListener("change", async () => {
-    const file = pdfFileInput.files[0];
-    if (!file) return;
-
-    if (file.type !== "application/pdf") {
-      showToast("⚠️ Sirf PDF files allowed hain.");
-      pdfFileInput.value = "";
-      return;
-    }
-
-    attachedPdfFile = file;
-    attachedPdfText = null;
-    showAttachedFile(file);
-
-    // Agar guidelines screen abhi khuli hai to hata do
-    if (pdfChatMode) {
-      pdfChatScreen.classList.add("hidden");
-    }
-
-    isExtractingPdf = true;
-    setAttachedFileStatus("processing");
-    showToast("📄 PDF process ho rahi hai, thoda intezar karein...");
-
-    try {
-      const text = await extractPdfText(file);
-
-      if (!text || text.trim().length < 20) {
-        showToast("⚠️ Is PDF se text nahi mil saka — shayad ye scanned/image-based PDF hai.");
-        setAttachedFileStatus("error");
-        attachedPdfText = null;
-      } else {
-        // Safety cap — bohot lambi PDF ho to sirf shuru ka hissa bhejo (quota bachane ke liye)
-        const MAX_CHARS = 60000;
-        attachedPdfText = text.length > MAX_CHARS
-          ? text.slice(0, MAX_CHARS) + "\n\n[...PDF bohot lambi hai, sirf shuru ka hissa include kiya gaya hai...]"
-          : text;
-        setAttachedFileStatus("ready");
-        showToast(`✅ "${file.name}" ready hai — ab is PDF ke baare mein poochain!`);
-      }
-    } catch (err) {
-      console.error("[PDF Extract Error]", err);
-      showToast("⚠️ PDF process nahi ho saki. Dobara try karein.");
-      setAttachedFileStatus("error");
-      attachedPdfText = null;
-    }
-
-    isExtractingPdf = false;
-  });
+  // ===== PDF CHAT (poora setup pdf-chat.js mein hai) =====
+  setupPdfChatListeners();
 }
-
-// ===== PDF TEXT EXTRACTION (pdf.js, client-side) =====
-async function extractPdfText(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-  let fullText = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join(" ");
-    fullText += `\n\n--- Page ${i} ---\n${pageText}`;
-  }
-  return fullText.trim();
-}
-
-// ===== PDF CHAT MODE =====
-function enterPdfChatMode() {
-  pdfChatMode = true;
-  clearMessages();
-  showWelcome(false);
-
-  // Pichli PDF chat messages restore karo (agar koi thi)
-  if (pdfChatMessages.length > 0) {
-    pdfChatScreen.classList.add("hidden"); // guidelines mat dikhao, messages dikhao
-    pdfChatMessages.forEach(m => renderMessage(m.role, m.content));
-    // Restart button dikhao (sirf PDF chat mein)
-    showPdfRestartBtn();
-  } else {
-    pdfChatScreen.classList.remove("hidden"); // pehli baar — guidelines dikhao
-  }
-
-  closeSidebarMobile();
-  messageInput.focus();
-
-  // Highlight PDF Chat button, hata do "Recent Chats" wali active highlight
-  pdfChatBtn.classList.add("active");
-  document.querySelectorAll(".history-item-wrap.active").forEach(el => el.classList.remove("active"));
-  messageInput.placeholder = "Ask anything about your PDF...";
-}
-
-function exitPdfChatMode() {
-  if (!pdfChatMode) return;
-  pdfChatMode = false;
-  pdfChatScreen.classList.add("hidden");
-  // Note: pdfChatMessages aur attachedPdf clear NAHI karte — wapas click pe restore honge
-  // Sirf UI reset karo
-  hidePdfRestartBtn();
-
-  // PDF Chat button ki highlight hatao, wapas current session ki highlight lagao
-  pdfChatBtn.classList.remove("active");
-  messageInput.placeholder = "Ask anything about University of Layyah...";
-  renderHistory();
-}
-
-function showPdfRestartBtn() {
-  let btn = document.getElementById("pdfRestartBtn");
-  if (!btn) {
-    btn = document.createElement("button");
-    btn.id = "pdfRestartBtn";
-    btn.className = "pdf-restart-btn";
-    btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> New PDF Chat`;
-    btn.addEventListener("click", resetPdfChat);
-    // Input area ke upar lagao
-    const inputArea = document.querySelector(".input-area");
-    inputArea.insertBefore(btn, inputArea.firstChild);
-  }
-  btn.style.display = "flex";
-}
-
-function hidePdfRestartBtn() {
-  const btn = document.getElementById("pdfRestartBtn");
-  if (btn) btn.style.display = "none";
-}
-
-function resetPdfChat() {
-  // PDF chat bilkul fresh start
-  pdfChatMessages = [];
-  clearMessages();
-  clearAttachedFile();
-  pdfChatScreen.classList.remove("hidden");
-  hidePdfRestartBtn();
-  messageInput.placeholder = "Ask anything about your PDF...";
-}
-
-function showAttachedFile(file) {
-  attachedFileChip.innerHTML = `
-    <span class="chip-icon">📄</span>
-    <span class="chip-name">${file.name}</span>
-    <span class="chip-status processing" id="chipStatus">Processing…</span>
-    <button class="chip-remove" id="removeAttachedFile" title="Remove">✕</button>
-  `;
-  attachedFileChip.classList.add("show");
-  document.getElementById("removeAttachedFile").addEventListener("click", clearAttachedFile);
-}
-
-function setAttachedFileStatus(status) {
-  const el = document.getElementById("chipStatus");
-  if (!el) return;
-  if (status === "processing") { el.textContent = "Processing…"; el.className = "chip-status processing"; }
-  else if (status === "ready") { el.textContent = "Ready"; el.className = "chip-status ready"; }
-  else if (status === "error") { el.textContent = "Error"; el.className = "chip-status error"; }
-}
-
-function clearAttachedFile() {
-  attachedPdfFile = null;
-  attachedPdfText = null;
-  isExtractingPdf = false;
-  pdfFileInput.value = "";
-  attachedFileChip.classList.remove("show");
-  attachedFileChip.innerHTML = "";
-}
-
-// ===== TOAST NOTIFICATION =====
 let toastTimeout = null;
 function showToast(message) {
   let toast = document.getElementById("ulToast");
@@ -580,7 +416,7 @@ function deleteSession(id) {
 function renameSession(id) {
   const session = chatSessions.find(s => s.id === id);
   if (!session) return;
-  const newTitle = prompt("Chat ka naya naam likhein:", session.title);
+  const newTitle = prompt("Enter a new chat name:", session.title);
   if (newTitle && newTitle.trim()) {
     session.title = newTitle.trim();
     saveSessions();
@@ -932,11 +768,11 @@ async function handleSend() {
   // ===== PDF CHAT GUARDS =====
   if (pdfChatMode) {
     if (isExtractingPdf) {
-      showToast("⏳ PDF abhi process ho rahi hai, thoda intezar karein...");
+      showToast("⏳ Your PDF is being processed. Please wait...");
       return;
     }
     if (!attachedPdfText) {
-      showToast("📎 Pehle koi PDF attach karein.");
+      showToast("📎 Please attach a PDF first.");
       return;
     }
   }
@@ -1007,7 +843,6 @@ async function handleSend() {
       userMsg = `⚠️ **Internal Issue**
  
 Mujhe afsos hai, abhi kuch technical masla aa gaya hai.
- 
 Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
  
 > *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*
@@ -1020,9 +855,7 @@ Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
       userMsg = `🐢 **Thora Aahista**
 
 Aapne thoray waqt mein bohat zyada messages bhej diye hain.
-
 Yeh limit isliye hai taake **sab students** UL AI use kar sakein — sirf ek hi user system busy na kar de.
-
 ⏱️ Kuch minute ruk kar dobara try karein.`;
 
     } else if (err.quotaExceeded) {
@@ -1034,9 +867,7 @@ Yeh limit isliye hai taake **sab students** UL AI use kar sakein — sirf ek hi 
       userMsg = `⏳ **Aaj Ki Limit Khatam Ho Gayi Hai**
 
 UL AI ki free daily limit abhi exceed ho gayi hai.
-
 🕐 Limit reset hogi: **${resetTime}** Pakistan time${hoursText}
-
 Us waqt ke baad dobara try karein, sab kuch normal kaam karega.
 
 > *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*`;
@@ -1045,9 +876,7 @@ Us waqt ke baad dobara try karein, sab kuch normal kaam karega.
       userMsg = `⏳ **Thori Dair Baad Try Karein**
  
 Abhi system pe bohot zyada requests aa rahi hain (rate limit).
- 
-Kripya **1-2 minute** baad dobara try karein.
- 
+Baray mehrbani **1-2 minute** baad dobara try karein.
 > *Agar problem continue ho to [ul.edu.pk](https://ul.edu.pk) visit karein.*`;
  
     } else if (msg.toLowerCase().includes("network") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("failed")) {
@@ -1062,7 +891,6 @@ Server se connection nahi ho paya. Yeh check karein:
       userMsg = `⚠️ **Internal Issue**
  
 Mujhe afsos hai, ek unexpected error aaya hai.
- 
 Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
  
 > *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*
@@ -1085,6 +913,30 @@ Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
   messageInput.focus();
 }
  
+// TOKEN USAGE BAR (backend /api/usage aur response.usage se update hoti hai)
+function updateTokenUsageBar(usage) {
+  const trackEl = document.getElementById("tokenUsageTrack");
+  const pctEl = document.getElementById("tokenUsagePct");
+  if (!trackEl || !pctEl || !usage) return;
+
+  const totalBars = 20;
+  const percent = Math.max(0, Math.min(100, usage.percent ?? 0));
+  const filledBars = Math.round((percent / 100) * totalBars);
+
+  trackEl.textContent = "█".repeat(filledBars) + "░".repeat(totalBars - filledBars);
+  pctEl.textContent = `${percent}% Used`;
+}
+
+async function loadInitialTokenUsage() {
+  try {
+    const res = await fetch("/api/usage");
+    const data = await res.json();
+    updateTokenUsageBar(data);
+  } catch (_) {
+    // Chup chaap ignore karo — ye sirf ek temporary debug bar hai
+  }
+}
+
 // ===== SAFE JSON PARSE (agar server se HTML/error page aa jaye to clear message de) =====
 async function parseJsonSafely(response) {
   const raw = await response.text();
@@ -1107,7 +959,7 @@ async function callGeminiAPI(messages) {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages })
+    body: JSON.stringify({ messages, deviceId: getDeviceId() })
   });
 
   const data = await parseJsonSafely(response);
@@ -1127,34 +979,13 @@ async function callGeminiAPI(messages) {
     throw error;
   }
 
-  return data.reply || "No response received.";
-}
-
-// ===== BACKEND API CALL — PDF CHAT (extracted PDF text + question) =====
-async function callPdfChatAPI(messages, pdfText) {
-  const response = await fetch("/api/pdf-chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, pdfText })
-  });
-
-  const data = await parseJsonSafely(response);
-
-  if (!response.ok) {
-    const error = new Error(data.error || `Server Error ${response.status}`);
-    if (data.quotaExceeded) {
-      error.quotaExceeded = true;
-      error.resetTimePKT = data.resetTimePKT;
-      error.hoursRemaining = data.hoursRemaining;
-    }
-    if (data.rateLimited) {
-      error.rateLimited = true;
-    }
-    throw error;
-  }
+  // Token usage bar update karo (backend response mein 'usage' aata hai)
+  if (data.usage) updateTokenUsageBar(data.usage);
 
   return data.reply || "No response received.";
 }
+
+// NOTE: callPdfChatAPI() ab pdf-chat.js mein hai
 
 // ===== SUGGESTION CARDS =====
 function sendSuggestion(text) {

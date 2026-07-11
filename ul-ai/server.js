@@ -3,15 +3,29 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const rateLimit = require("express-rate-limit")
 
 const app = express();
+
+// ===== TRUST PROXY =====
+// Agar app kisi reverse proxy/hosting service (Render, Railway, Vercel, Nginx, Cloudflare, waghera)
+// ke peeche deploy hai, to yeh zaroori hai — warna Express ko real client IP kabhi nahi milega,
+// aur sab requests ek hi (proxy ka) IP jese dikhengi (jo humara asal bug tha).
+// "1" ka matlab hai: ek hop trust karo (jo aam PaaS setups ke liye sahi hai).
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Main university chat ke liye alag key, PDF Chat ke liye alag key — dono ka
+// quota independent rahega, ek dusre ko touch nahi karega.
+const GEMINI_API_KEY_1 = process.env.GEMINI_API_KEY_1;
+const PDF_API_KEY = process.env.PDF_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-if (!GEMINI_API_KEY) {
-  console.error("❌ GEMINI_API_KEY .env file mein nahi mili! .env.example dekho.");
+if (!GEMINI_API_KEY_1) {
+  console.error("❌ GEMINI_API_KEY_1 .env file mein nahi mili! .env.example dekho.");
+}
+if (!PDF_API_KEY) {
+  console.error("❌ PDF_API_KEY .env file mein nahi mili — PDF Chat kaam nahi karega.");
 }
 
 // ===== UNIVERSITY CONTEXT — backend mein, frontend ko nazar nahi aata =====
@@ -332,6 +346,79 @@ function getQuotaResetTime() {
   return { formatted, hoursRemaining };
 }
  
+// ============================================================
+// TOKEN USAGE TRACKER (permanent) — file mein persist hota hai
+// ============================================================
+// Ye Google ke asal account-level quota se LIVE sync nahi hai — sirf humara apna
+// tracked estimate hai, jo Gemini ke har response ke "usageMetadata" se count karta hai.
+// Ye sirf ek helpful andaza/dashboard hai — Google ka real quota isse bilkul independent
+// hai (upar chat mein detail se explain kiya gaya hai).
+//
+// File mein isliye save karte hain taake server restart (Ctrl+C, crash, redeploy) hone par
+// bhi aaj ka count na kho jaye.
+//
+// NOTE (Render free tier): Render ka free plan ephemeral filesystem use karta hai — matlab
+// agar aap naya code deploy karte hain (git push se redeploy), to poori filesystem fresh
+// ban jati hai aur ye file bhi reset ho jayegi. Sirf normal restart (jaise process crash se
+// khud-ba-khud restart, bina naye deploy ke) mein file surakshit rehti hai. Agar Render pe
+// bhi deploys ke through persist karna ho, to paid "Render Disk" ya koi external storage
+// (jaise ek chhota database) chahiye hoga.
+const DAILY_TOKEN_BUDGET = 1000000; // <-- yahan apna estimated daily token budget daalein
+const USAGE_FILE = path.join(__dirname, "token-usage.json");
+
+let dailyTokensUsed = 0;
+let usageTrackerDatePT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+
+// ===== Startup pe purana saved usage load karo (agar file mojood ho aur aaj ki hi ho) =====
+try {
+  if (fs.existsSync(USAGE_FILE)) {
+    const saved = JSON.parse(fs.readFileSync(USAGE_FILE, "utf-8"));
+    if (saved.date === usageTrackerDatePT) {
+      dailyTokensUsed = saved.used || 0;
+      console.log(`✅ Token usage file se load hui: ${dailyTokensUsed} tokens (aaj, ${usageTrackerDatePT})`);
+    } else {
+      console.log("ℹ️ Purani usage file mili lekin purane din ki hai — 0 se shuru kar rahe hain.");
+    }
+  }
+} catch (err) {
+  console.error("⚠️ Token usage file load nahi ho saki:", err.message);
+}
+
+// ===== Har update ke baad file mein save karo (async, taake request slow na ho) =====
+function saveUsageToFile() {
+  fs.writeFile(
+    USAGE_FILE,
+    JSON.stringify({ date: usageTrackerDatePT, used: dailyTokensUsed }),
+    (err) => {
+      if (err) console.error("⚠️ Token usage file save nahi ho saki:", err.message);
+    }
+  );
+}
+
+function trackTokenUsage(usageMetadata) {
+  const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+  if (todayPT !== usageTrackerDatePT) {
+    // Naya din (PT ke hisaab se, jahan Gemini quota bhi reset hota hai) — counter reset karo
+    dailyTokensUsed = 0;
+    usageTrackerDatePT = todayPT;
+  }
+  if (usageMetadata?.totalTokenCount) {
+    dailyTokensUsed += usageMetadata.totalTokenCount;
+  }
+  saveUsageToFile();
+}
+
+function getUsageSnapshot() {
+  const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+  if (todayPT !== usageTrackerDatePT) {
+    dailyTokensUsed = 0;
+    usageTrackerDatePT = todayPT;
+    saveUsageToFile();
+  }
+  const percent = Math.min(100, Math.round((dailyTokensUsed / DAILY_TOKEN_BUDGET) * 100));
+  return { used: dailyTokensUsed, limit: DAILY_TOKEN_BUDGET, percent };
+}
+
 // ===== MIDDLEWARE =====
 app.use(cors());
 app.use(express.json({ limit: "5mb" })); // PDF extracted text bhejne ke liye default 100kb limit kaafi nahi thi
@@ -341,27 +428,45 @@ app.use(express.static(path.join(__dirname))); // index.html, style.css, app.js 
 // Har IP address ko apni alag limit milti hai — yeh Gemini ki overall free quota se
 // chhoti rakhi gayi hai taake ek user, baqi sab students ke liye service down na kar sake.
  
-// Short-term limit: 1 minute mein zyada se zyada 8 messages per IP (spam/bot protection)
+// ===== RATE LIMIT KEY =====
+// Login system nahi hai, isliye frontend ek anonymous deviceId (localStorage mein) generate
+// karta hai aur har request ke saath bhejta hai. Hum isay IP ki jagah primary key banate hain,
+// taake university WiFi/NAT ke peeche jo bohot saare students ek hi public IP share karte hain,
+// unko ek dusre ki limit ka nuksan na ho — har device/browser ki apni alag, fair limit hogi.
+function getRateLimitKey(req) {
+  const id = req.body?.deviceId;
+  if (typeof id === "string" && id.length > 0 && id.length <= 100) {
+    return `dev:${id}`;
+  }
+  // deviceId na mile (purana cached page, JS disabled, waghera) to IP pe fallback karo
+  return `ip:${req.ip}`;
+}
+
+// Short-term limit: 1 minute mein zyada se zyada 8 messages per device (spam/bot protection)
 const minuteLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 8,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  validate: false, // custom keyGenerator use kar rahe hain, built-in IP validation warnings skip karo
   message: {
-    error: "Bohat zyada messages bhej diye thoray waqt mein. Kripya 1 minute ruk kar dobara try karein.",
+    error: "Bohat zyada messages bhej diye thoray waqt mein. Mehrbani ferma kar 1 minute ruk kar dobara try karein.",
     rateLimited: true,
   },
 });
- 
-// Daily limit: 1 din mein zyada se zyada 60 messages per IP
+
+// Daily limit: 1 din mein zyada se zyada 60 messages per device
 // (taake ek hi user, university ke sab students ke liye daily Gemini quota na khatam kar de)
 const dailyLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  validate: false,
   message: {
-    error: "Aaj ke liye aapki personal limit khatam ho gayi hai. Kal dobara try karein, ya seedha ul.edu.pk visit karein.",
+    error: "You've reached your daily usage limit. Please try again tomorrow, or visit ul.edu.pk directly.",
     rateLimited: true,
   },
 });
@@ -388,7 +493,7 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
       : "";
     const contextWithName = UNIVERSITY_CONTEXT + userNameNote;
  
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY_1}`;
  
     const response = await fetch(url, {
       method: "POST",
@@ -428,7 +533,8 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
     }
  
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
-    res.json({ reply });
+    trackTokenUsage(data.usageMetadata); // token usage tracker (permanent)
+    res.json({ reply, usage: getUsageSnapshot() });
   } catch (err) {
     console.error("[Server Error]", err);
     res.status(500).json({ error: err.message || "Internal server error" });
@@ -461,7 +567,7 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
 
     const systemInstruction = `${PDF_CHAT_SYSTEM_PROMPT}\n\n=== UPLOADED PDF CONTENT (extracted text) ===\n${safePdfText}\n=== END OF PDF CONTENT ===`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${PDF_API_KEY}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -498,7 +604,8 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
     }
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
-    res.json({ reply });
+    trackTokenUsage(data.usageMetadata); // token usage tracker (permanent)
+    res.json({ reply, usage: getUsageSnapshot() });
   } catch (err) {
     console.error("[Server Error - PDF Chat]", err);
     res.status(500).json({ error: err.message || "Internal server error" });
@@ -508,6 +615,11 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
 // ===== HEALTH CHECK =====
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", model: GEMINI_MODEL });
+});
+
+// Token usage bar ke liye — page load pe initial value dikhane ke liye.
+app.get("/api/usage", (req, res) => {
+  res.json(getUsageSnapshot());
 });
 
 // ===== Status =====

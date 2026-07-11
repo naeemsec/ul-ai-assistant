@@ -817,6 +817,36 @@ body {
 
 .chip-remove:hover { color: var(--text-primary); }
 
+/* TOKEN USAGE BAR */
+.token-usage-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 0 auto 10px;
+  padding: 5px 10px;
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: -1px;
+}
+
+.token-usage-track {
+  color: var(--accent);
+  letter-spacing: -1px;
+}
+
+.token-usage-pct {
+  font-family: inherit;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 /* ===== TOAST NOTIFICATION ===== */
 .ul-toast {
   position: fixed;

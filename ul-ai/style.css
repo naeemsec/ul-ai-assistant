@@ -1586,6 +1586,22 @@ select.setting-input { cursor: pointer; }
   margin-left: 48px; /* avatar width + gap ke barabar align karne ke liye */
 }
 
+/* Jab Groq (backup model) ne jawab diya ho, is chhote badge se pata chalta hai */
+.backup-model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 4px 0 0 48px; /* avatar ke sath align */
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: default;
+}
+
 .copy-btn {
   background: transparent;
   border: 1px solid transparent;

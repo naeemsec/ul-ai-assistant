@@ -28,6 +28,16 @@ if (!PDF_API_KEY) {
   console.error("❌ PDF_API_KEY .env file mein nahi mili — PDF Chat kaam nahi karega.");
 }
 
+// ===== GROQ (BACKUP MODEL — SIRF NORMAL CHAT KE LIYE, PDF Chat ko touch nahi karta) =====
+// Jab Gemini ki (bohot chhoti, ~5/din) free limit khatam ho jaye, normal university chat
+// automatically Groq pe switch ho jata hai taake user ko turant error na mile.
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODEL = process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+
+if (!GROQ_API_KEY) {
+  console.error("⚠️ GROQ_API_KEY .env file mein nahi mili — Gemini ki limit khatam hone par backup kaam nahi karega.");
+}
+
 // ===== UNIVERSITY CONTEXT — backend mein, frontend ko nazar nahi aata =====
 const UNIVERSITY_CONTEXT = `
 You are UL AI — the official AI assistant for the University of Layyah (ul.edu.pk), located in Layyah, Punjab, Pakistan.
@@ -68,11 +78,143 @@ ADMISSIONS:
 - 5. Submit and Download Admission Form. Submit your application and keep visiting the portal for merit lists and updates.
 
 FEES & SCHOLARSHIPS:
-- Fee structure varies by category/program type and admission year
+- Fee structure varies by category/program type, shift (Morning/Evening), and admission year
 - Fees are relatively affordable as it's a public university
 - Scholarship opportunities available through HEC, provincial government, and university merit scholarships
 - NTS/HEC Need-Based Scholarships available for deserving students
+- (Detailed semester-wise fee tables are provided separately when a student specifically asks about fees — see FEE_CONTEXT.)
 
+DEPARTMENTS & FACULTY (Detailed):
+
+1. DEPARTMENT OF COMPUTER SCIENCE
+   - Head of Department (HoD): Sir Mohammad Ali
+   - Faculty Members:
+     * Engr. Ghulam Qadir
+     * Faria Malik
+     * M Anas Khan
+     * Bakhtawar Sarfaraz
+   - Programs Offered: BS Computer Science (4 years)
+   - Key Subjects: Programming, Data Structures, Algorithms, Database, Networks, AI, Software Engineering
+
+2. DEPARTMENT OF MATHEMATICS
+   - Head of Department (HoD): M Irfan Thind
+   - Programs Offered: BS Mathematics (4 years)
+   - Key Subjects: Calculus, Algebra, Statistics, Real Analysis, Differential Equations
+
+3. DEPARTMENT OF PHYSICS
+   - Programs Offered: BS Physics (4 years)
+   - Key Subjects: Mechanics, Electromagnetism, Optics, Quantum Physics, Thermodynamics
+
+4. DEPARTMENT OF CHEMISTRY
+   - Programs Offered: BS Chemistry (4 years)
+   - Key Subjects: Organic Chemistry, Inorganic Chemistry, Physical Chemistry, Analytical Chemistry
+
+5. DEPARTMENT OF BOTANY
+   - Programs Offered: BS Botany (4 years)
+   - Key Subjects: Plant Physiology, Ecology, Taxonomy, Genetics, Microbiology
+
+6. DEPARTMENT OF ZOOLOGY
+   - Programs Offered: BS Zoology (4 years)
+   - Key Subjects: Cell Biology, Genetics, Ecology, Animal Physiology, Entomology
+
+7. DEPARTMENT OF ENGLISH
+   - Programs Offered: BS English (4 years)
+   - Key Subjects: Literature, Linguistics, Communication Skills, Creative Writing
+
+8. DEPARTMENT OF URDU
+   - Programs Offered: BS Urdu (4 years)
+   - Key Subjects: Urdu Literature, Poetry, Prose, Language Skills
+
+9. DEPARTMENT OF ISLAMIC STUDIES
+   - Programs Offered: BS Islamic Studies (4 years)
+   - Key Subjects: Quran, Hadith, Fiqh, Islamic History
+
+10. DEPARTMENT OF EDUCATION
+    - Programs Offered: BS Education (4 years)
+    - Key Subjects: Pedagogy, Educational Psychology, Curriculum Development
+
+11. DEPARTMENT OF SPORT SCIENCE & PHYSICAL EDUCATION
+    - Programs Offered: BS Sport Science (4 years)
+    - Key Subjects: Sports Medicine, Physical Training, Sports Management
+
+UPCOMING EVENTS:
+- Sports Week: Sports Gala is usually held in Spring season
+- Science Exhibition: Not mentioned
+- Admission Open House: June-August
+
+CAMPUS CULTURE & RULES:
+- Co-education system
+- Dress code: Formal/semi-formal
+- Attendance requirement: 75% minimum
+- Semester system: 2 semesters per year (Spring & Fall)
+- Exams: Mid-term + Final
+
+HOSTEL INFO:
+- Boys Hostel: Available
+- Girls Hostel: Available, separate block
+- Monthly fee: 20k (Approx)
+
+ENTRY TEST:
+- University of Layyah mein koi entry test NAHI hota
+- Admission SIRF merit pe hota hai (30% Matric + 70% Inter marks)
+
+MERIT CALCULATION — STRICT RULES (MUST FOLLOW):
+
+Formula: Merit = ((Matric obtained / Matric total) x 30) + ((Inter obtained / Inter total) x 70)
+
+IMPORTANT RULES:
+1. KABHI BHI fixed total (1100 ya 1200) ASSUME NAHI KARNA — yeh galat hoga
+2. Jab bhi koi merit calculate karne ko kahe ya apne marks bataye, PEHLE yeh 4 cheezein poochho:
+   - Matric mein kitne marks mile? (obtained)
+   - Matric total kitna tha? (out of kitne — 1100 ya 1200 ya kuch aur)
+   - Inter mein kitne marks mile? (obtained)
+   - Inter total kitna tha? (out of kitne — 1100 ya 1200 ya kuch aur)
+3. Agar student ne sirf obtained marks bataye hain lekin total nahi bataya, to ZAROOR poochho
+4. Agar student ne partial info di hai (e.g. sirf matric ke dono numbers) to baki ki info maango
+5. Sirf jab CHARON numbers mil jayein tab calculate karo
+
+EXAMPLE (correct way):
+- Matric: 980 out of 1100 → (980/1100) x 30 = 26.73
+- Inter: 1050 out of 1200 → (1050/1200) x 70 = 61.25
+- Total Merit = 26.73 + 61.25 = 87.98
+
+MIXED TOTALS (common case — handle karo):
+- Kuch students ke Matric 1100 mein tha aur Inter 1200 mein — yeh perfectly valid hai
+- Formula same rahega — sirf actual totals use karo jo student ne bataye
+
+CONTACT:
+- Website: https://ul.edu.pk/contact
+- City Campus: Katchehry Road, Layyah
+- Contact no: +920606920247
+
+UMS (UNIVERSITY MANAGEMENT SYSTEM) / STUDENT PORTAL:
+- UMS Login Link: https://ul.edu.pk/login
+- Yahan se students apni profile, result, aur academic record dekh sakte hain
+- Employees (teachers/staff) bhi isi portal se login karte hain
+- Login karne ke 3 steps:
+  1. Login type select karo: "Employee" ya "Student"
+  2. Apna registered Email daalo
+  3. Apna Password daalo, phir Login button dabao
+- Agar password yaad nahi ya account access nahi ho raha, forget password pe click karo
+- Jab koi student "result kaise dekhun" ya "apna profile kaise dekhun" ya "UMS  kya hai" pooche, unhe yeh login link aur upar wale steps batao
+
+DEVELOPER/BOSS
+- Boss/Sir Naeem from CS 2025-29
+- Created to assist students with university information and academic support.
+- Developed: June 2026  
+
+BEHAVIOR GUIDELINES:
+- If someone asks something NOT related to University of Layyah, gently redirect them by saying you are specialized for UL-related queries, but you can still try to help with general academic or educational questions.
+- Always recommend users to verify important information (admissions deadlines, fee amounts) directly from ul.edu.pk as these may change.
+- Respond in the same language the user is writing in (Urdu or English).
+- Be friendly and supportive, especially to students who seem confused or need guidance.
+- If you don't know a specific detail (like exact fee amounts), say so honestly and direct them to the official website.
+`;
+
+// ===== FEE CONTEXT (alag rakha hai — sirf fee-related sawal par UNIVERSITY_CONTEXT ke =====
+// sath jodte hain, taake har normal message ke sath ye bara fee data na jaye aur
+// token usage kam ho. Dekho isFeeRelatedQuery() aur uska use /api/chat mein.)
+const FEE_CONTEXT = `
 FEE STRUCTURE — BEHAVIOR RULE (IMPORTANT):
 University of Layyah has 4 program categories, each with a DIFFERENT fee structure:
 1. Computer Science Programs (BS CS, IT, AI, Data Science)
@@ -193,109 +335,25 @@ Total: 302,517
 Total: 394,005
 
 NOTE: This fee data is for Session 2026. If a student asks about a different admission year, tell them fees may vary and recommend checking ul.edu.pk/page/fee-structure for the exact updated figures, since fee structures are revised periodically.
-
-DEPARTMENTS & FACULTY (Detailed):
-
-1. DEPARTMENT OF COMPUTER SCIENCE
-   - Head of Department (HoD): Sir Mohammad Ali
-   - Faculty Members:
-     * Engr. Ghulam Qadir
-     * Faria Malik
-     * M Anas Khan
-     * Bakhtawar Sarfaraz
-   - Programs Offered: BS Computer Science (4 years)
-   - Key Subjects: Programming, Data Structures, Algorithms, Database, Networks, AI, Software Engineering
-
-2. DEPARTMENT OF MATHEMATICS
-   - Head of Department (HoD): M Irfan Thind
-   - Programs Offered: BS Mathematics (4 years)
-   - Key Subjects: Calculus, Algebra, Statistics, Real Analysis, Differential Equations
-
-3. DEPARTMENT OF PHYSICS
-   - Programs Offered: BS Physics (4 years)
-   - Key Subjects: Mechanics, Electromagnetism, Optics, Quantum Physics, Thermodynamics
-
-4. DEPARTMENT OF CHEMISTRY
-   - Programs Offered: BS Chemistry (4 years)
-   - Key Subjects: Organic Chemistry, Inorganic Chemistry, Physical Chemistry, Analytical Chemistry
-
-5. DEPARTMENT OF BOTANY
-   - Programs Offered: BS Botany (4 years)
-   - Key Subjects: Plant Physiology, Ecology, Taxonomy, Genetics, Microbiology
-
-6. DEPARTMENT OF ZOOLOGY
-   - Programs Offered: BS Zoology (4 years)
-   - Key Subjects: Cell Biology, Genetics, Ecology, Animal Physiology, Entomology
-
-7. DEPARTMENT OF ENGLISH
-   - Programs Offered: BS English (4 years)
-   - Key Subjects: Literature, Linguistics, Communication Skills, Creative Writing
-
-8. DEPARTMENT OF URDU
-   - Programs Offered: BS Urdu (4 years)
-   - Key Subjects: Urdu Literature, Poetry, Prose, Language Skills
-
-9. DEPARTMENT OF ISLAMIC STUDIES
-   - Programs Offered: BS Islamic Studies (4 years)
-   - Key Subjects: Quran, Hadith, Fiqh, Islamic History
-
-10. DEPARTMENT OF EDUCATION
-    - Programs Offered: BS Education (4 years)
-    - Key Subjects: Pedagogy, Educational Psychology, Curriculum Development
-
-11. DEPARTMENT OF SPORT SCIENCE & PHYSICAL EDUCATION
-    - Programs Offered: BS Sport Science (4 years)
-    - Key Subjects: Sports Medicine, Physical Training, Sports Management
-
-UPCOMING EVENTS:
-- Sports Week: Sports Gala is usually held in Spring season
-- Science Exhibition: Not mentioned
-- Admission Open House: June-August
-
-CAMPUS CULTURE & RULES:
-- Co-education system
-- Dress code: Formal/semi-formal
-- Attendance requirement: 75% minimum
-- Semester system: 2 semesters per year (Spring & Fall)
-- Exams: Mid-term + Final
-
-HOSTEL INFO:
-- Boys Hostel: Available
-- Girls Hostel: Available, separate block
-- Monthly fee: 20k
-
-ENTRY TEST:
-- University of Layyah mein koi entry test NAHI hota
-- Admission SIRF merit pe hota hai (30% Matric + 70% Inter marks)
-
-CONTACT:
-- Website: https://ul.edu.pk/contact
-- City Campus: Katchehry Road, Layyah
-- Contact no: +920606920247
-
-UMS (UNIVERSITY MANAGEMENT SYSTEM) / STUDENT PORTAL:
-- UMS Login Link: https://ul.edu.pk/login
-- Yahan se students apni profile, result, aur academic record dekh sakte hain
-- Employees (teachers/staff) bhi isi portal se login karte hain
-- Login karne ke 3 steps:
-  1. Login type select karo: "Employee" ya "Student"
-  2. Apna registered Email daalo
-  3. Apna Password daalo, phir Login button dabao
-- Agar password yaad nahi ya account access nahi ho raha, forget password pe click karo
-- Jab koi student "result kaise dekhun" ya "apna profile kaise dekhun" ya "UMS  kya hai" pooche, unhe yeh login link aur upar wale steps batao
-
-DEVELOPER/BOSS
-- Boss/Sir Naeem from CS 2025-29
-- Created to assist students with university information and academic support.
-- Developed: June 2026  
-
-BEHAVIOR GUIDELINES:
-- If someone asks something NOT related to University of Layyah, gently redirect them by saying you are specialized for UL-related queries, but you can still try to help with general academic or educational questions.
-- Always recommend users to verify important information (admissions deadlines, fee amounts) directly from ul.edu.pk as these may change.
-- Respond in the same language the user is writing in (Urdu or English).
-- Be friendly and supportive, especially to students who seem confused or need guidance.
-- If you don't know a specific detail (like exact fee amounts), say so honestly and direct them to the official website.
 `;
+
+// Fee-related sawal detect karne ke liye simple keyword check — English + Roman Urdu dono.
+// False-positive (kabhi kabhi zaroorat na hone par bhi include ho jana) theek hai, koi
+// nuksan nahi; false-negative (fee context miss ho jana) se bachna zyada zaroori hai.
+const FEE_KEYWORDS = [
+  "fee", "fees", "tuition", "cost", "charges", "dues", "installment",
+  "kharcha", "kharche", "paisa", "paise", "fee structure",
+  "semester fee", "admission fee", "morning shift", "evening shift",
+  "kitne paise", "kitni fee", "how much",
+];
+
+function isFeeRelatedQuery(messages) {
+  // Last 4 messages check karo (sirf latest question nahi) — taake agar AI ne
+  // pehle "kis category?" poocha ho aur student sirf "CS, morning" reply kare
+  // (jisme "fee" lafz na ho), tab bhi context sahi mile.
+  const recentText = messages.slice(-4).map((m) => m.content).join(" ").toLowerCase();
+  return FEE_KEYWORDS.some((keyword) => recentText.includes(keyword));
+}
 
 // ===== PDF CHAT — SYSTEM PROMPT (ab /api/pdf-chat endpoint isay use karta hai) =====
 const PDF_CHAT_SYSTEM_PROMPT = `
@@ -363,7 +421,7 @@ function getQuotaResetTime() {
 // khud-ba-khud restart, bina naye deploy ke) mein file surakshit rehti hai. Agar Render pe
 // bhi deploys ke through persist karna ho, to paid "Render Disk" ya koi external storage
 // (jaise ek chhota database) chahiye hoga.
-const DAILY_TOKEN_BUDGET = 1000000; // <-- yahan apna estimated daily token budget daalein
+const DAILY_TOKEN_BUDGET = 250000; // <-- yahan apna estimated daily token budget daalein
 const USAGE_FILE = path.join(__dirname, "token-usage.json");
 
 let dailyTokensUsed = 0;
@@ -417,6 +475,130 @@ function getUsageSnapshot() {
   }
   const percent = Math.min(100, Math.round((dailyTokensUsed / DAILY_TOKEN_BUDGET) * 100));
   return { used: dailyTokensUsed, limit: DAILY_TOKEN_BUDGET, percent };
+}
+
+// ============================================================
+// GEMINI LOCAL USAGE TRACKER (Groq fallback decide karne ke liye)
+// ============================================================
+// Gemini ki asal free limit bohot chhoti hai (~5 RPD, ~5 RPM — December 2025 mein
+// Google ne cut kar di). Hum khud in dono ko track karte hain taake:
+// 1. Jab pata ho ke Gemini already exhausted hai, seedha Groq try karein (ek wasted,
+//    guaranteed-fail Gemini call na karein)
+// 2. Agar Gemini phir bhi real 429 de de (kisi aur wajah se, jaise races), tab bhi
+//    neeche wala try/catch Groq pe fallback kar dega.
+//
+// NOTE: Google apni free-tier limits kabhi bhi badal sakta hai — agar aage chal kar
+// number change ho to yahan GEMINI_RPD_LIMIT / GEMINI_RPM_LIMIT update kar dein,
+// ya .env mein GEMINI_RPD_LIMIT / GEMINI_RPM_LIMIT set kar dein (code change ki
+// zaroorat nahi hogi).
+const GEMINI_RPD_LIMIT = parseInt(process.env.GEMINI_RPD_LIMIT, 10) || 5;
+const GEMINI_RPM_LIMIT = parseInt(process.env.GEMINI_RPM_LIMIT, 10) || 5;
+
+let geminiRequestTimestamps = []; // pichle 60 seconds ki attempts (RPM ke liye)
+let geminiDailyCount = 0;
+let geminiDailyDatePT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+
+function canUseGeminiNow() {
+  const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+  if (todayPT !== geminiDailyDatePT) {
+    geminiDailyCount = 0;
+    geminiDailyDatePT = todayPT;
+  }
+  const now = Date.now();
+  geminiRequestTimestamps = geminiRequestTimestamps.filter((t) => now - t < 60 * 1000);
+
+  return geminiDailyCount < GEMINI_RPD_LIMIT && geminiRequestTimestamps.length < GEMINI_RPM_LIMIT;
+}
+
+// Ye har Gemini ATTEMPT (chahay success ho ya fail) ke turant pehle call karo —
+// kyunke Google ke RPM/RPD ke against fail hui request bhi shayad count hoti hai.
+function recordGeminiAttempt() {
+  geminiRequestTimestamps.push(Date.now());
+  geminiDailyCount++;
+}
+
+// Poore din mein sirf EK dafa "backup model pe switch ho gaya" wala notice dikhana hai —
+// baaki saari Groq-powered responses bilkul normal (bina kisi indication ke) dikhni chahiye.
+let fallbackNotifiedDatePT = null;
+
+function shouldNotifyFallback() {
+  const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
+  if (fallbackNotifiedDatePT !== todayPT) {
+    fallbackNotifiedDatePT = todayPT;
+    return true; // aaj ka pehla switch — notify karo
+  }
+  return false; // aaj already notify ho chuka hai
+}
+
+// ===== GROQ BACKUP CALL (sirf normal chat ke liye — PDF Chat isay use nahi karta) =====
+async function callGroqChat(messages, userName) {
+  const userNameNote = userName
+    ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
+    : "";
+  const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
+
+  async function attemptGroqCall(historyLimit) {
+    // Groq ki TPM limit Gemini se kaafi chhoti hai — lambi conversations mein poori
+    // history bhejne se request TPM cap cross kar sakti hai. Backup model ka kaam
+    // sirf turant ka jawab dena hai, isliye sirf recent messages bhejte hain.
+    const trimmedMessages = messages.slice(-historyLimit);
+
+    const groqMessages = [
+      { role: "system", content: UNIVERSITY_CONTEXT + feeContext + userNameNote },
+      ...trimmedMessages.map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content,
+      })),
+    ];
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: groqMessages,
+        temperature: 0.7,
+        max_tokens: 2048,
+        // NOTE: 'reasoning_format' yahan jaanbujh kar nahi bheja — ye sirf reasoning-capable
+        // models (jaise qwen3) support karte hain; normal instruct models (jaise llama-4-scout)
+        // is param pe error dete hain. Isliye hum sirf neeche wali <think> stripping (jo har
+        // model ke sath safely kaam karti hai) pe hi rely karte hain.
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("[Groq Error]", data);
+      const err = new Error(data.error?.message || `Groq API Error ${response.status}`);
+      err.isTpmError = data.error?.code === "rate_limit_exceeded" && data.error?.type === "tokens";
+      throw err;
+    }
+
+    let content = data.choices?.[0]?.message?.content || "No response received.";
+
+    // Safety net: agar (reasoning-capable) model ne <think>...</think> content ke
+    // andar bhej diya ho, to usay yahan se hata dein. Non-reasoning models ke liye
+    // ye simply kuch nahi karega (koi <think> tag nahi milega to no-op rahega).
+    content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+    return content;
+  }
+
+  try {
+    return await attemptGroqCall(8); // normal case — last 8 messages
+  } catch (err) {
+    if (err.isTpmError) {
+      // Bohot lambi conversation/message ki wajah se abhi bhi TPM cross ho gaya —
+      // sirf latest question ke sath ek aakhri koshish karo (system prompt + last message)
+      console.warn("[Groq] TPM limit phir bhi cross hui — sirf latest message ke sath retry.");
+      return await attemptGroqCall(1);
+    }
+    throw err;
+  }
 }
 
 // ===== MIDDLEWARE =====
@@ -476,65 +658,116 @@ const dailyLimiter = rateLimit({
 app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
   try {
     const { messages, userName } = req.body;
- 
+
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages array required" });
     }
- 
-    const history = messages.slice(0, -1).map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
-    const lastMsg = messages[messages.length - 1];
 
-    // User ka naam context mein add karo taake AI naturally use kare
-    const userNameNote = userName
-      ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
-      : "";
-    const contextWithName = UNIVERSITY_CONTEXT + userNameNote;
- 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY_1}`;
- 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: contextWithName }] },
-        contents: [...history, { role: "user", parts: [{ text: lastMsg.content }] }],
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-      }),
-    });
- 
-    const data = await response.json();
- 
-    if (!response.ok) {
-      console.error("[Gemini Error]", data);
-      const msg = data.error?.message || `API Error ${response.status}`;
- 
-      // ===== RATE LIMIT / QUOTA DETECTION =====
-      // Gemini free tier ka quota midnight Pacific Time (PT) par reset hota hai.
-      // Hum yeh time calculate kar ke Pakistan Time (PKT) mein batate hain.
-      const isQuotaError =
-        response.status === 429 ||
-        msg.toLowerCase().includes("quota") ||
-        msg.toLowerCase().includes("rate limit");
- 
-      if (isQuotaError) {
+    let reply;
+    let usage = null;
+    let provider = "gemini";
+
+    if (canUseGeminiNow()) {
+      try {
+        recordGeminiAttempt();
+
+        const history = messages.slice(0, -1).map((m) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        }));
+        const lastMsg = messages[messages.length - 1];
+
+        // User ka naam context mein add karo taake AI naturally use kare
+        const userNameNote = userName
+          ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
+          : "";
+        // Fee-related sawal ho tabhi FEE_CONTEXT jodo — taake normal messages mein
+        // ye bara fee data na jaye aur token usage kam rahe.
+        const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
+        const contextWithName = UNIVERSITY_CONTEXT + feeContext + userNameNote;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY_1}`;
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: contextWithName }] },
+            contents: [...history, { role: "user", parts: [{ text: lastMsg.content }] }],
+            generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("[Gemini Error]", data);
+          const msg = data.error?.message || `API Error ${response.status}`;
+
+          // ===== RATE LIMIT / QUOTA DETECTION =====
+          const isQuotaError =
+            response.status === 429 ||
+            msg.toLowerCase().includes("quota") ||
+            msg.toLowerCase().includes("rate limit");
+
+          if (isQuotaError) {
+            const err = new Error(msg);
+            err.quotaExceeded = true;
+            throw err;
+          }
+
+          throw new Error(msg);
+        }
+
+        reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
+        trackTokenUsage(data.usageMetadata); // token usage tracker (permanent)
+        usage = getUsageSnapshot();
+      } catch (err) {
+        if (err.quotaExceeded) {
+          console.warn("[Fallback] Gemini ki limit khatam — Groq (backup) pe switch ho raha hai.");
+          provider = "groq";
+        } else {
+          throw err; // koi aur (unexpected) error — normal error handling mein jaye
+        }
+      }
+    } else {
+      console.log("[Fallback] Gemini ka apna tracked budget (RPM/RPD) khatam — seedha Groq use ho raha hai.");
+      provider = "groq";
+    }
+
+    if (provider === "groq") {
+      if (!GROQ_API_KEY) {
+        // Backup configure hi nahi hai — asal Gemini quota error dikhao (jaisa pehle hota tha)
         const resetInfo = getQuotaResetTime();
         return res.status(429).json({
-          error: msg,
+          error: "Gemini ki free limit khatam ho gayi hai, aur backup (Groq) configure nahi hai.",
           quotaExceeded: true,
           resetTimePKT: resetInfo.formatted,
           hoursRemaining: resetInfo.hoursRemaining,
         });
       }
- 
-      return res.status(response.status).json({ error: msg });
+
+      // Poore din mein sirf pehli baar switch hone par sirf ek notice bhejo —
+      // is turn ka actual jawab skip karo (Groq call bhi waste nahi hoti). User
+      // ko dobara message bhejna hoga, tab se saari responses bilkul normal hongi.
+      if (shouldNotifyFallback()) {
+        return res.json({
+          reply: `⚡ **Switching to Backup Model**
+
+The default AI model has reached its free daily limit for today.
+The system is automatically switching to a backup model so you can keep chatting normally.
+
+> Please send your message again to get your answer.`,
+          usage: null,
+          provider: "groq",
+          isFirstFallback: true,
+        });
+      }
+
+      reply = await callGroqChat(messages, userName);
     }
- 
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
-    trackTokenUsage(data.usageMetadata); // token usage tracker (permanent)
-    res.json({ reply, usage: getUsageSnapshot() });
+
+    res.json({ reply, usage, provider, isFirstFallback: false });
   } catch (err) {
     console.error("[Server Error]", err);
     res.status(500).json({ error: err.message || "Internal server error" });

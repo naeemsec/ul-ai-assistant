@@ -42,7 +42,7 @@ function setupPdfChatListeners() {
     if (!file) return;
 
     if (file.type !== "application/pdf") {
-      showToast("⚠️ Sirf PDF files allowed hain.");
+      showToast("⚠️ Only PDF files are allowed.");
       pdfFileInput.value = "";
       return;
     }
@@ -58,13 +58,13 @@ function setupPdfChatListeners() {
 
     isExtractingPdf = true;
     setAttachedFileStatus("processing");
-    showToast("📄 PDF process ho rahi hai, thoda intezar karein...");
+    showToast("📄 Processing your PDF, please wait...");
 
     try {
       const text = await extractPdfText(file);
 
       if (!text || text.trim().length < 20) {
-        showToast("⚠️ Is PDF se text nahi mil saka — shayad ye scanned/image-based PDF hai.");
+        showToast("⚠️ Could not extract text from this PDF — it may be a scanned/image-based file.");
         setAttachedFileStatus("error");
         attachedPdfText = null;
       } else {
@@ -74,11 +74,11 @@ function setupPdfChatListeners() {
           ? text.slice(0, MAX_CHARS) + "\n\n[...PDF bohot lambi hai, sirf shuru ka hissa include kiya gaya hai...]"
           : text;
         setAttachedFileStatus("ready");
-        showToast(`✅ "${file.name}" ready hai — ab is PDF ke baare mein poochain!`);
+        showToast(`✅ "${file.name}" is ready — you can now ask questions about it!`);
       }
     } catch (err) {
       console.error("[PDF Extract Error]", err);
-      showToast("⚠️ PDF process nahi ho saki. Dobara try karein.");
+      showToast("⚠️ Could not process the PDF. Please try again.");
       setAttachedFileStatus("error");
       attachedPdfText = null;
     }

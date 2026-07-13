@@ -560,7 +560,7 @@ function createCopyButton(textContent) {
   wrap.appendChild(btn);
   return wrap;
 }
- 
+
 // ===== TYPEWRITER EFFECT (word-by-word, fast) =====
 function typewriterMessage(text) {
   const div = document.createElement("div");
@@ -815,9 +815,17 @@ async function handleSend() {
   if (!pdfChatMode) saveSessions();
  
   try {
-    const reply = (pdfChatMode && attachedPdfText)
-      ? await callPdfChatAPI(pdfChatMessages, attachedPdfText)
-      : await callGeminiAPI(getSession().messages);
+    let reply;
+
+    if (pdfChatMode && attachedPdfText) {
+      reply = await callPdfChatAPI(pdfChatMessages, attachedPdfText);
+    } else {
+      const result = await callGeminiAPI(getSession().messages);
+      reply = result.reply;
+      // NOTE: Jab Gemini ki limit khatam ho aur system pehli baar Groq pe switch
+      // hota hai, backend is turn ka jawab nahi deta — sirf ek notice bhejta hai
+      // (reply ke tor par hi). Agla message bhejne par normal jawab milega.
+    }
     removeTyping();
 
     if (pdfChatMode) {
@@ -842,58 +850,58 @@ async function handleSend() {
       // Production mein: professional message
       userMsg = `⚠️ **Internal Issue**
  
-Mujhe afsos hai, abhi kuch technical masla aa gaya hai.
-Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
+Sorry, something went wrong on our end just now.
+Our team (**Boss Naeem**) has been notified and is working on a fix.
  
-> *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*
+> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*
  
 ---
 🔧 *Dev Info: ${msg}*`;
  
     } else if (err.rateLimited) {
       // ===== PER-IP RATE LIMIT — yeh tumhari apni limit hai, Gemini ki nahi =====
-      userMsg = `🐢 **Thora Aahista**
+      userMsg = `🐢 **Slow Down a Little**
 
-Aapne thoray waqt mein bohat zyada messages bhej diye hain.
-Yeh limit isliye hai taake **sab students** UL AI use kar sakein — sirf ek hi user system busy na kar de.
-⏱️ Kuch minute ruk kar dobara try karein.`;
+You've sent quite a few messages in a short time.
+This limit exists so that **all students** can use UL AI fairly — one user shouldn't overload the system.
+⏱️ Please wait a few minutes and try again.`;
 
     } else if (err.quotaExceeded) {
       // ===== QUOTA EXCEEDED — reset time ke saath professional message =====
       const resetTime = err.resetTimePKT || "midnight";
       const hours = err.hoursRemaining;
-      const hoursText = hours ? ` (taqreeban **${hours} ghante** baad)` : "";
+      const hoursText = hours ? ` (in about **${hours} hours**)` : "";
 
-      userMsg = `⏳ **Aaj Ki Limit Khatam Ho Gayi Hai**
+      userMsg = `⏳ **Today's Limit Reached**
 
-UL AI ki free daily limit abhi exceed ho gayi hai.
-🕐 Limit reset hogi: **${resetTime}** Pakistan time${hoursText}
-Us waqt ke baad dobara try karein, sab kuch normal kaam karega.
+UL AI's free daily limit has just been reached.
+🕐 It will reset at: **${resetTime}** Pakistan time${hoursText}
+Please try again after that — everything will work normally.
 
-> *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*`;
+> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*`;
 
     } else if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
-      userMsg = `⏳ **Thori Dair Baad Try Karein**
+      userMsg = `⏳ **Please Try Again Shortly**
  
-Abhi system pe bohot zyada requests aa rahi hain (rate limit).
-Baray mehrbani **1-2 minute** baad dobara try karein.
-> *Agar problem continue ho to [ul.edu.pk](https://ul.edu.pk) visit karein.*`;
+The system is receiving a lot of requests right now (rate limit).
+Please wait **1-2 minutes** and try again.
+> *If the problem continues, visit [ul.edu.pk](https://ul.edu.pk).*`;
  
     } else if (msg.toLowerCase().includes("network") || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("failed")) {
-      userMsg = `📡 **Internet Connection Check Karein**
+      userMsg = `📡 **Check Your Internet Connection**
  
-Server se connection nahi ho paya. Yeh check karein:
-- **Internet** sahi kaam kar raha hai?
-- **VPN** use ho rahi hai? Band kar ke try karein.
-- Page **refresh** kar ke dobara try karein.`;
+Couldn't connect to the server. Please check:
+- Is your **internet** working properly?
+- Are you using a **VPN**? Try turning it off.
+- **Refresh** the page and try again.`;
  
     } else {
       userMsg = `⚠️ **Internal Issue**
  
-Mujhe afsos hai, ek unexpected error aaya hai.
-Main **Boss Naeem** se rabta kar raha hoon taake ye jald fix ho sake.
+Sorry, an unexpected error occurred.
+Our team (**Boss Naeem**) has been notified and is working on a fix.
  
-> *Agar urgent kaam hai to seedha [ul.edu.pk](https://ul.edu.pk) visit karein.*
+> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*
  
 ---
 🔧 *Dev Info: ${msg}*`;
@@ -982,7 +990,11 @@ async function callGeminiAPI(messages) {
   // Token usage bar update karo (backend response mein 'usage' aata hai)
   if (data.usage) updateTokenUsageBar(data.usage);
 
-  return data.reply || "No response received.";
+  return {
+    reply: data.reply || "No response received.",
+    provider: data.provider || "gemini",
+    isFirstFallback: !!data.isFirstFallback,
+  };
 }
 
 // NOTE: callPdfChatAPI() ab pdf-chat.js mein hai

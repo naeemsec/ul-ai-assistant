@@ -15,11 +15,26 @@ const app = express();
 // "1" ka matlab hai: ek hop trust karo (jo aam PaaS setups ke liye sahi hai).
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
+
+// ===== ERROR SANITIZATION (security) =====
+// Production mein raw internal error details (Google/Groq ke exact error strings,
+// model names, internal structure) kabhi bhi client ko network response mein nahi
+// jane chahiye — ye ek attacker ko system ke internals ka clue de sakte hain.
+// Development/Beta mein poora detail milta hai taake debugging aasan ho.
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+//const IS_PRODUCTION = "development";
+
+function sanitizeError(rawMessage) {
+  if (IS_PRODUCTION) {
+    return "An internal error occurred. Please try again in a moment.";
+  }
+  return rawMessage;
+}
 // Main university chat ke liye alag key, PDF Chat ke liye alag key — dono ka
 // quota independent rahega, ek dusre ko touch nahi karega.
 const GEMINI_API_KEY_1 = process.env.GEMINI_API_KEY_1;
 const PDF_API_KEY = process.env.PDF_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 if (!GEMINI_API_KEY_1) {
   console.error("❌ GEMINI_API_KEY_1 .env file mein nahi mili! .env.example dekho.");
@@ -53,22 +68,33 @@ KEY INFORMATION ABOUT UNIVERSITY OF LAYYAH:
 - Affiliation: Higher Education Commission (HEC) of Pakistan
 
 DEPARTMENTS & PROGRAMS (known):
-- Department of Computer Science
-- Department of Mathematics
-- Department of Physics
-- Department of Chemistry
-- Department of Botany
-- Department of Zoology
-- Department of English
-- Department of Urdu
-- Department of Islamic Studies
-- Department of Education
-- Department of Sport Science & Physical Education
+- BS Computer Science
+- BS Artificial Intelligence
+- BS Information Technology
+- BS Data Science
+- BS Mathematics
+- BBA - Business Administration
+- BBA - IT
+- BS Public Administration
+- BS Physics
+- BS Chemistry
+- BS Botany
+- BS Zoology
+- BS Sociology
+- BS English
+- BS Urdu
+- BS Islamic Studies
+- BS Commerce
+- BS Education
+- BS Economics
+- BS International Relations
+- BS Sport Science & Physical Education
 
 ADMISSIONS:
 - Admission is conducted through online portal at ul.edu.pk/admissions
 - Merit-based admissions following HEC guidelines
-- Documents needed: Matric and Inter (2nd year) certificates, CNIC/B-form, domicile, passport photos
+- Eligibility: FA / FSc or Equivalent (Minimum 45% for Arts, 50% for Science & BBA) Marks in PART-I or combined
+- Documents needed: Matric + Inter (2nd year) certificates, CNIC/B-form, domicile, passport photos
 - Admission usually opens once in a year in June-August for Fall semester
 - Steps for admissions
 - 1. Visit the Admission Portal. Go to the official admission portal at ul.edu.pk/admissions.
@@ -137,6 +163,24 @@ DEPARTMENTS & FACULTY (Detailed):
     - Programs Offered: BS Sport Science (4 years)
     - Key Subjects: Sports Medicine, Physical Training, Sports Management
 
+FACILITIES:
+- Advanced Computer Lab
+- Latest Digital Logic Design Lab
+- Advanced Electronics Lab
+- Newly Structured Chemistry & Physics Labs
+- Agriculture Livestock Experimental Research Farms
+- Fully Functional Veterinary Science Labs
+- Medical Center
+- Transport Facility
+- Cafeteria
+- Library
+
+SCHOLARSHIPS:
+- Prime Minister Youth Laptop Scheme
+- Chief Minister Youth Laptop Scheme
+- Cheif Minister Honhaar Scholarship
+- HEC Naeed-Based Scholarship
+
 UPCOMING EVENTS:
 - Sports Week: Sports Gala is usually held in Spring season
 - Science Exhibition: Not mentioned
@@ -150,8 +194,7 @@ CAMPUS CULTURE & RULES:
 - Exams: Mid-term + Final
 
 HOSTEL INFO:
-- Boys Hostel: Available
-- Girls Hostel: Available, separate block
+- Only Girls Hostel: Available, separate block
 - Monthly fee: 20k (Approx)
 
 ENTRY TEST:
@@ -770,7 +813,7 @@ The system is automatically switching to a backup model so you can keep chatting
     res.json({ reply, usage, provider, isFirstFallback: false });
   } catch (err) {
     console.error("[Server Error]", err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
   }
 });
  
@@ -826,14 +869,14 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
       if (isQuotaError) {
         const resetInfo = getQuotaResetTime();
         return res.status(429).json({
-          error: msg,
+          error: sanitizeError(msg),
           quotaExceeded: true,
           resetTimePKT: resetInfo.formatted,
           hoursRemaining: resetInfo.hoursRemaining,
         });
       }
 
-      return res.status(response.status).json({ error: msg });
+      return res.status(response.status).json({ error: sanitizeError(msg) });
     }
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
@@ -841,7 +884,7 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
     res.json({ reply, usage: getUsageSnapshot() });
   } catch (err) {
     console.error("[Server Error - PDF Chat]", err);
-    res.status(500).json({ error: err.message || "Internal server error" });
+    res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
   }
 });
 
@@ -857,7 +900,7 @@ app.get("/api/usage", (req, res) => {
 
 // ===== Status =====
 app.get("/api/status", (req, res) => {
-  res.json({environment:process.env.NODE_ENV === "production" ? "production" : "development"});
+  res.json({environment:process.env.NODE_ENV === "production" ? "production" : "development"}); // development
 });
  
 app.listen(PORT, () => {

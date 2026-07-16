@@ -34,10 +34,14 @@ function setupPdfChatListeners() {
   // ===== PDF CHAT BUTTON =====
   pdfChatBtn.addEventListener("click", enterPdfChatMode);
 
-  // ===== ATTACH (PDF) BUTTON =====
-  attachBtn.addEventListener("click", () => pdfFileInput.click());
+  // ===== ATTACH (PDF) BUTTON — sirf PDF Chat mode mein kaam karta hai =====
+  attachBtn.addEventListener("click", () => {
+    if (!pdfChatMode) return; // safety guard — button already disabled rehta hai normal chat mein
+    pdfFileInput.click();
+  });
 
   pdfFileInput.addEventListener("change", async () => {
+    if (!pdfChatMode) return; // safety guard
     const file = pdfFileInput.files[0];
     if (!file) return;
 
@@ -125,19 +129,31 @@ function enterPdfChatMode() {
   pdfChatBtn.classList.add("active");
   document.querySelectorAll(".history-item-wrap.active").forEach(el => el.classList.remove("active"));
   messageInput.placeholder = "Ask anything about your PDF...";
+
+  // Attach button sirf PDF Chat mode mein enable hota hai
+  attachBtn.disabled = false;
+  attachBtn.title = "Attach PDF";
 }
 
 function exitPdfChatMode() {
   if (!pdfChatMode) return;
   pdfChatMode = false;
   pdfChatScreen.classList.add("hidden");
-  // Note: pdfChatMessages aur attachedPdf clear NAHI karte — wapas click pe restore honge
-  // Sirf UI reset karo
+
+  // User ne kaha: normal chat mein PDF ka koi mahol nahi rehna chahiye — isliye
+  // attached PDF (file + text + chip) aur uski poori conversation yahan clear kar dete hain.
+  pdfChatMessages = [];
+  clearAttachedFile();
   hidePdfRestartBtn();
 
   // PDF Chat button ki highlight hatao, wapas current session ki highlight lagao
   pdfChatBtn.classList.remove("active");
   messageInput.placeholder = "Ask anything about University of Layyah...";
+
+  // Attach button sirf PDF Chat mode mein kaam karta hai — normal chat mein disable
+  attachBtn.disabled = true;
+  attachBtn.title = "Attach PDF (only available in PDF Chat)";
+
   renderHistory();
 }
 
@@ -149,9 +165,8 @@ function showPdfRestartBtn() {
     btn.className = "pdf-restart-btn";
     btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> New PDF Chat`;
     btn.addEventListener("click", resetPdfChat);
-    // Input area ke upar lagao
-    const inputArea = document.querySelector(".input-area");
-    inputArea.insertBefore(btn, inputArea.firstChild);
+    // Status row ke right column mein lagao (ek hi line mein chip — usage bar — ye button)
+    document.getElementById("statusRowRight").appendChild(btn);
   }
   btn.style.display = "flex";
 }

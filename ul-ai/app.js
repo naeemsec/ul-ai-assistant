@@ -97,17 +97,22 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
  
+// Production mein "Dev Info" jaisi internal debug details chat mein show nahi karni —
+// ye check /api/status se milta hai (server pehle hi is hisaab se sab kuch sanitize
+// karta hai, lekin frontend mein bhi extra clean UI ke liye ye flag use karte hain).
+let isProductionEnv = false;
+
 async function updateEnvironmentBadge() {
-  console.log("updateEnvironmentBadge called");
-    const badge = document.getElementById("topbarBadge");
-    if (!badge) return;
-    try {
-        const res = await fetch("/api/status");
-        const data = await res.json();
-        badge.textContent = data.environment === "production" ? "Live" : "Beta";
-    } catch (e) {
-        badge.textContent = "Beta";
-    }
+  const badge = document.getElementById("topbarBadge");
+  if (!badge) return;
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    isProductionEnv = data.environment === "production";
+    badge.textContent = isProductionEnv ? "Live" : "Beta";
+  } catch (e) {
+    badge.textContent = "Beta";
+  }
 }
 function setupEventListeners() {
   sidebarToggle.addEventListener("click", toggleSidebar);
@@ -846,17 +851,17 @@ async function handleSend() {
     let userMsg = "";
  
     if (msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("not valid") || msg.toLowerCase().includes("invalid")) {
-      // Development mein: actual error dikhao
-      // Production mein: professional message
+      // Development/Beta mein: extra dev info dikhao (debugging ke liye)
+      // Production mein: sirf professional message, koi internal detail nahi
       userMsg = `⚠️ **Internal Issue**
  
 Sorry, something went wrong on our end just now.
-Our team (**Boss Naeem**) has been notified and is working on a fix.
+Let me notify **Boss Naeem** about this issue. He will investigate it as soon as possible.
  
-> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*
+> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*${isProductionEnv ? "" : `
  
 ---
-🔧 *Dev Info: ${msg}*`;
+🔧 *Dev Info: ${msg}*`}`;
  
     } else if (err.rateLimited) {
       // ===== PER-IP RATE LIMIT — yeh tumhari apni limit hai, Gemini ki nahi =====
@@ -899,12 +904,12 @@ Couldn't connect to the server. Please check:
       userMsg = `⚠️ **Internal Issue**
  
 Sorry, an unexpected error occurred.
-Our team (**Boss Naeem**) has been notified and is working on a fix.
+Let me notify **Boss Naeem** about this issue. He will investigate it as soon as possible.
  
-> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*
+> *If it's urgent, please visit [ul.edu.pk](https://ul.edu.pk) directly.*${isProductionEnv ? "" : `
  
 ---
-🔧 *Dev Info: ${msg}*`;
+🔧 *Dev Info: ${msg}*`}`;
     }
  
     if (pdfChatMode) {

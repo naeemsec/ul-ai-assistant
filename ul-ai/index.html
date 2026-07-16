@@ -172,22 +172,30 @@
 
     <!-- INPUT AREA -->
     <div class="input-area">
-      <!-- Token usage estimate bar -->
-      <div class="token-usage-bar" id="tokenUsageBar" title="Estimated daily token usage (temporary/debug — remove later)">
-        <span class="token-usage-track" id="tokenUsageTrack">░░░░░░░░░░░░░░░░░░░░</span>
-        <span class="token-usage-pct" id="tokenUsagePct">0% Used</span>
+      <!-- Status row: attached PDF chip (left) — token usage bar (center) — PDF restart button (right) -->
+      <div class="status-row">
+        <div class="status-row-left" id="statusRowLeft">
+          <div class="attached-file-chip" id="attachedFileChip"></div>
+        </div>
+        <div class="status-row-center">
+          <div class="token-usage-bar" id="tokenUsageBar" title="Estimated daily token usage (temporary/debug — remove later)">
+            <span class="token-usage-track" id="tokenUsageTrack">░░░░░░░░░░░░░░░░░░░░</span>
+            <span class="token-usage-pct" id="tokenUsagePct">0% Used</span>
+          </div>
+        </div>
+        <div class="status-row-right" id="statusRowRight"></div>
       </div>
-      <div class="attached-file-chip" id="attachedFileChip"></div>
       <div class="input-wrapper">
         <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
-        <button class="input-icon-btn" id="attachBtn" title="Attach PDF">
+        <button class="input-icon-btn" id="attachBtn" title="Attach PDF (sirf PDF Chat mein available)" disabled>
           <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
         </button>
+        <!-- oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,220)+'px'; this.style.overflowY = this.scrollHeight>220 ? 'auto' : 'hidden';" -->
         <textarea
           id="messageInput"
           class="message-input"
           placeholder="Ask anything about University of Layyah..."
-          oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,220)+'px'; this.style.overflowY = this.scrollHeight>220 ? 'auto' : 'hidden';"
+          oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,400)+'px'; this.style.overflowY = this.scrollHeight>400 ? 'auto' : 'hidden';"
         ></textarea>
         <button class="send-btn" id="sendBtn" title="Send (Enter)">
           <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -252,20 +260,29 @@
         </div>
 
         <div class="about-section">
-          <div class="about-section-title">Departments</div>
+          <div class="about-section-title">Programs</div>
           <div class="about-tags">
-            <span class="tag">Computer Science</span>
-            <span class="tag">Mathematics</span>
-            <span class="tag">Physics</span>
-            <span class="tag">Chemistry</span>
-            <span class="tag">Botany</span>
-            <span class="tag">Zoology</span>
-            <span class="tag">English</span>
-            <span class="tag">Urdu</span>
-            <span class="tag">Islamic Studies</span>
-            <span class="tag">Commerce</span>
-            <span class="tag">Education</span>
-            <span class="tag">Sport Science</span>
+            <span class="tag">BS Computer Science</span>
+            <span class="tag">BS Artificial Intelligence</span>
+            <span class="tag">BS Information Technology</span>
+            <span class="tag">BS Data Science</span>
+            <span class="tag">BS Mathematics</span>
+            <span class="tag">BBA - Business Administration</span>
+            <span class="tag">BBA - IT</span>
+            <span class="tag">BS Public Administration</span>
+            <span class="tag">BS Physics</span>
+            <span class="tag">BS Chemistry</span>
+            <span class="tag">BS Botany</span>
+            <span class="tag">BS Zoology</span>
+            <span class="tag">BS Sociology</span>
+            <span class="tag">BS English</span>
+            <span class="tag">BS Urdu</span>
+            <span class="tag">BS Islamic Studies</span>
+            <span class="tag">BS Commerce</span>
+            <span class="tag">BS Education</span>
+            <span class="tag">BS Economics</span>
+            <span class="tag">BS International Relations</span>
+            <span class="tag">BS Sport Science</span>
           </div>
         </div>
 

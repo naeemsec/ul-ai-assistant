@@ -513,11 +513,14 @@ let feedbackTransporter = null;
 
 if (FEEDBACK_EMAIL_USER && FEEDBACK_EMAIL_APP_PASSWORD) {
   feedbackTransporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
     auth: {
       user: FEEDBACK_EMAIL_USER,
       pass: FEEDBACK_EMAIL_APP_PASSWORD,
     },
+    family: 4, // IPv6 route Render pe unreachable hoti hai — IPv4 force karo
   });
 } else {
   console.error("⚠️ FEEDBACK_EMAIL_USER / FEEDBACK_EMAIL_APP_PASSWORD .env mein nahi mili — feedback emails nahi bhej payenge.");

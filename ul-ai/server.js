@@ -190,7 +190,7 @@ CAMPUS CULTURE & RULES:
 - Co-education system
 - Dress code: Formal/semi-formal
 - Attendance requirement: 75% minimum
-- Semester system: 2 semesters per year (Spring & Fall)
+- Semester system: 2 semesters per year (Fall & Spring)
 - Exams: Mid-term + Final
 
 HOSTEL INFO:
@@ -496,6 +496,56 @@ function saveUsageToFile() {
   );
 }
 
+// ============================================================
+// FEEDBACK SYSTEM (5-star rating + bug/feature/general messages)
+// ============================================================
+// File mein save NAHI karte — Render ka disk ephemeral hai, deploy hone par data
+// kho sakta hai. Iski jagah har feedback turant email ke through bhej dete hain,
+// taake koi bhi Render ki storage involve na ho — email Gmail ke apne inbox mein
+// hamesha ke liye surakshit rehta hai.
+const nodemailer = require("nodemailer");
+
+const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER; // aapka Gmail address
+const FEEDBACK_EMAIL_APP_PASSWORD = process.env.FEEDBACK_EMAIL_APP_PASSWORD; // Gmail App Password (16-char code)
+const FEEDBACK_EMAIL_TO = process.env.FEEDBACK_EMAIL_TO || FEEDBACK_EMAIL_USER; // kisay bhejna hai (default: khud ko)
+
+let feedbackTransporter = null;
+
+if (FEEDBACK_EMAIL_USER && FEEDBACK_EMAIL_APP_PASSWORD) {
+  feedbackTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: FEEDBACK_EMAIL_USER,
+      pass: FEEDBACK_EMAIL_APP_PASSWORD,
+    },
+  });
+} else {
+  console.error("⚠️ FEEDBACK_EMAIL_USER / FEEDBACK_EMAIL_APP_PASSWORD .env mein nahi mili — feedback emails nahi bhej payenge.");
+}
+
+async function sendFeedbackEmail(entry) {
+  if (!feedbackTransporter) {
+    throw new Error("Email not configured on server.");
+  }
+
+  const categoryLabel = { general: "💬 General Feedback", bug: "🐛 Bug Report", feature: "✨ Feature Request" };
+  const stars = "★".repeat(entry.rating) + "☆".repeat(5 - entry.rating);
+
+  await feedbackTransporter.sendMail({
+    from: `"UL AI Feedback" <${FEEDBACK_EMAIL_USER}>`,
+    to: FEEDBACK_EMAIL_TO,
+    subject: `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`,
+    text: `Rating: ${stars} (${entry.rating}/5)
+Category: ${categoryLabel[entry.category]}
+${entry.name ? `Name: ${entry.name}\n` : ""}Time: ${new Date(entry.timestamp).toLocaleString()}
+Device: ${entry.deviceId || "unknown"}
+
+Message:
+${entry.message || "(no message provided)"}`,
+  });
+}
+
+
 function trackTokenUsage(usageMetadata) {
   const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   if (todayPT !== usageTrackerDatePT) {
@@ -696,6 +746,20 @@ const dailyLimiter = rateLimit({
   },
 });
  
+// Feedback limit: spam se bachne ke liye, 1 din mein zyada se zyada 5 feedback per device
+const feedbackLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  validate: false,
+  message: {
+    error: "You've reached today's feedback limit. Please try again tomorrow.",
+    rateLimited: true,
+  },
+});
+
 // ===== CHAT ENDPOINT =====
 // Frontend yahan POST request bhejega: { messages: [...] }
 app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
@@ -884,6 +948,41 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
     res.json({ reply, usage: getUsageSnapshot() });
   } catch (err) {
     console.error("[Server Error - PDF Chat]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
+  }
+});
+
+// ===== FEEDBACK ENDPOINT =====
+// Frontend yahan POST karega: { rating: 1-5, category: "general"|"bug"|"feature", message, deviceId }
+app.post("/api/feedback", feedbackLimiter, async (req, res) => {
+  try {
+    const { rating, category, message, deviceId, name} = req.body;
+
+    const ratingNum = Number(rating);
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({ error: "Rating must be an integer between 1 and 5." });
+    }
+
+    const safeName = typeof name === "string" ? name.trim().slice(0, 50) : "";
+    const validCategories = ["general", "bug", "feature"];
+    const safeCategory = validCategories.includes(category) ? category : "general";
+
+    const safeMessage = typeof message === "string" ? message.trim().slice(0, 2000) : "";
+
+    const entry = {
+      name: safeName,
+      rating: ratingNum,
+      category: safeCategory,
+      message: safeMessage,
+      deviceId: typeof deviceId === "string" ? deviceId.slice(0, 100) : null,
+      timestamp: new Date().toISOString(),
+    };
+
+    await sendFeedbackEmail(entry);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Server Error - Feedback]", err);
     res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
   }
 });

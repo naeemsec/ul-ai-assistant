@@ -45,6 +45,19 @@ const welcomeScreen  = document.getElementById("welcomeScreen");
 const chatHistory    = document.getElementById("chatHistory");
 const settingsBtn    = document.getElementById("settingsBtn");
 const settingsModal  = document.getElementById("settingsModal");
+
+// ===== FEEDBACK DOM REFS =====
+const feedbackFab          = document.getElementById("feedbackFab");
+const feedbackModal        = document.getElementById("feedbackModal");
+const closeFeedback        = document.getElementById("closeFeedback");
+const feedbackStars        = document.getElementById("feedbackStars");
+const feedbackName         = document.getElementById("feedbackName");
+const feedbackCategoryRow  = document.getElementById("feedbackCategoryRow");
+const feedbackMessage      = document.getElementById("feedbackMessage");
+const feedbackSendBtn      = document.getElementById("feedbackSendBtn");
+
+let feedbackRating = 0;
+let feedbackCategory = "general";
 const aboutModal     = document.getElementById("aboutModal");
 const closeSettings  = document.getElementById("closeSettings");
 const closeAbout     = document.getElementById("closeAbout");
@@ -127,6 +140,33 @@ function setupEventListeners() {
     }
   });
   settingsBtn.addEventListener("click", () => settingsModal.classList.add("open"));
+
+  // ===== FEEDBACK MODAL =====
+  feedbackFab.addEventListener("click", () => {
+    resetFeedbackForm();
+    feedbackModal.classList.add("open");
+  });
+  closeFeedback.addEventListener("click", () => feedbackModal.classList.remove("open"));
+  feedbackModal.addEventListener("click", (e) => { if (e.target === feedbackModal) feedbackModal.classList.remove("open"); });
+
+  // Star rating clicks
+  feedbackStars.querySelectorAll(".star-btn").forEach((star) => {
+    star.addEventListener("click", () => {
+      feedbackRating = parseInt(star.dataset.value, 10);
+      updateStarDisplay();
+    });
+  });
+
+  // Category pill clicks
+  feedbackCategoryRow.querySelectorAll(".feedback-cat-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      feedbackCategory = btn.dataset.cat;
+      feedbackCategoryRow.querySelectorAll(".feedback-cat-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+
+  feedbackSendBtn.addEventListener("click", submitFeedback);
   closeSettings.addEventListener("click", () => settingsModal.classList.remove("open"));
   closeAbout.addEventListener("click", () => aboutModal.classList.remove("open"));
   
@@ -182,6 +222,63 @@ function showToast(message) {
   toastTimeout = setTimeout(() => {
     toast.classList.remove("show");
   }, 2800);
+}
+
+// ===== FEEDBACK LOGIC =====
+function updateStarDisplay() {
+  feedbackStars.querySelectorAll(".star-btn").forEach((star) => {
+    const val = parseInt(star.dataset.value, 10);
+    star.classList.toggle("filled", val <= feedbackRating);
+  });
+}
+
+function resetFeedbackForm() {
+  feedbackName.value = "";
+  feedbackRating = 0;
+  feedbackCategory = "general";
+  feedbackMessage.value = "";
+  updateStarDisplay();
+  feedbackCategoryRow.querySelectorAll(".feedback-cat-btn").forEach((b) => b.classList.remove("active"));
+  feedbackCategoryRow.querySelector('[data-cat="general"]').classList.add("active");
+}
+
+async function submitFeedback() {
+  if (feedbackRating < 1) {
+    showToast("⭐ Please select a star rating first.");
+    return;
+  }
+
+  feedbackSendBtn.disabled = true;
+  feedbackSendBtn.textContent = "Sending...";
+
+  try {
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: feedbackName.value.trim(),
+        rating: feedbackRating,
+        category: feedbackCategory,
+        message: feedbackMessage.value.trim(),
+        deviceId: getDeviceId(),
+      }),
+    });
+
+    const data = await parseJsonSafely(response);
+
+    if (!response.ok) {
+      throw new Error(data.error || "Something went wrong.");
+    }
+
+    feedbackModal.classList.remove("open");
+    showToast("🙏 Thanks for your feedback!");
+  } catch (err) {
+    console.error("[Feedback Error]", err);
+    showToast("⚠️ Could not send feedback. Please try again.");
+  } finally {
+    feedbackSendBtn.disabled = false;
+    feedbackSendBtn.textContent = "Send Feedback";
+  }
 }
  
 // ===== SIDEBAR =====
@@ -1014,6 +1111,10 @@ function sendSuggestion(text) {
 function autoResize(el) {
   const maxHeight = 220; // CSS ke max-height se match hona chahiye
 
+  // Pehle overflow hidden karo, phir height "auto" karke measure karo — is order se
+  // hi scrollHeight sahi milta hai (warna kabhi kabhi purani/scrollbar-affected value
+  // aa jati hai, jiski wajah se text empty karne par bhi box bara hi reh jata tha).
+  el.style.overflowY = "hidden";
   el.style.height = "auto";
   const newHeight = el.scrollHeight;
 

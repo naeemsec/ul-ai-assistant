@@ -18,6 +18,7 @@ The assistant can answer questions about admissions, academic programs, departme
 - Modern and responsive user interface
 - Dark and light theme support
 - Persistent chat history with rename/delete options
+- New AI PDF-Chat Used to analysis the PDF and answer related questions
 - Easy deployment and customization
 
 ## Purpose
@@ -28,7 +29,7 @@ The goal of this project is to improve information accessibility for students an
 
 - **Frontend:** HTML5, CSS3, Vanilla JavaScript
 - **Backend:** Node.js, Express.js
-- **AI Engine:** Google Gemini API
+- **AI Engine:** Google Gemini API, GROQ API
 - **Storage:** Browser LocalStorage (chat history)
 
 ## Architecture
@@ -48,12 +49,16 @@ The frontend never communicates directly with the Gemini API. All requests are r
 ```
 ul-ai-assistant/
 ├── ul-ai/
-│   ├── assets/          # Logo and static assets
-│   ├── index.html       # Application structure
-│   ├── style.css        # Styling and themes
-│   └── server.js        # Backend server (API logic)
+│   ├── assets/            # Logo and static assets
+│   ├── index.html         # Application structure
+│   ├── style.css          # Styling and themes
+|   ├── app.js             # Web Logic
+│   └── server.js          # Backend server (API logic)
+│   └── pdf-chat.js        # AI PDF-Chat Backend
+│   └── token-usage.json   # Count token usage/day
 ├── .env
 ├── .gitignore
+├── package-lock.json
 ├── package.json
 └── README.md
 ```

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI – University of Layyah Assistant</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- UL Logo as Favicon — assets/ul-logo.png rakho -->
+  <!-- UL Logo as Favicon — assets/ul-logo.png -->
   <link rel="icon" type="image/png" href="assets/ul-logo.png" />
   <link rel="shortcut icon" href="assets/ul-logo.png" />
 </head>
@@ -20,7 +20,7 @@
     <div class="sidebar-header">
       <div class="logo">
         <div class="logo-icon">
-          <!-- UL Logo: assets/ul-logo.png rakho, nahi mila to "UL" text dikhega -->
+          <!-- UL Logo: assets/ul-logo.png, If not available then show "UL" text -->
           <img src="assets/ul-logo.png" alt="UL" class="logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
           <span class="logo-fallback">UL</span>
         </div>
@@ -98,26 +98,6 @@
         <h1 class="welcome-title">UL AI Assistant</h1>
         <p class="welcome-sub">Your intelligent guide to the <strong>University of Layyah</strong></p>
         
-        <!-- <div class="suggestion-list">
-          <button class="suggestion-chip" onclick="sendSuggestion('Admission process at University of Layyah?')">
-            🎓 Admission process at University of Layyah?'
-          </button>
-          <button class="suggestion-chip" onclick="sendSuggestion('What departments are offered at ul.edu.pk?')">
-            🏛️ What departments are offered at ul.edu.pk?
-          </button>
-          <button class="suggestion-chip" onclick="sendSuggestion('Fee structure at University of Layyah 2026?')">
-            💰 Fee structure at University of Layyah 2026?
-          </button>
-          <button class="suggestion-chip" onclick="sendSuggestion('How to contact University of Layyah?')">
-            📞 How to contact University of Layyah?
-          </button>
-          <button class="suggestion-chip" onclick="sendSuggestion('Scholarships available at University of Layyah?')">
-            🏆 Scholarships available at University of Layyah?
-          </button>
-          <button class="suggestion-chip" onclick="sendSuggestion('Campus facilities at University of Layyah?')">
-          🏫 Campus facilities at University of Layyah?
-          </button>
-        </div>   -->
         <div class="suggestion-grid">
           <button class="suggestion-card" onclick="sendSuggestion('Admission process at University of Layyah?')">
             <span class="suggestion-icon">🎓</span><span>Admission Process</span>
@@ -178,7 +158,7 @@
           <div class="attached-file-chip" id="attachedFileChip"></div>
         </div>
         <div class="status-row-center">
-          <div class="token-usage-bar" id="tokenUsageBar" title="Estimated daily token usage (temporary/debug — remove later)">
+          <div class="token-usage-bar" id="tokenUsageBar" title="Estimated daily token usage">
             <span class="token-usage-track" id="tokenUsageTrack">░░░░░░░░░░░░░░░░░░░░</span>
             <span class="token-usage-pct" id="tokenUsagePct">0% Used</span>
           </div>
@@ -195,7 +175,6 @@
           id="messageInput"
           class="message-input"
           placeholder="Ask anything about University of Layyah..."
-          oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,400)+'px'; this.style.overflowY = this.scrollHeight>400 ? 'auto' : 'hidden';"
         ></textarea>
         <button class="send-btn" id="sendBtn" title="Send (Enter)">
           <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
@@ -366,6 +345,47 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- PDF Chat feature ka poora JS isi alag file mein hai — app.js se pehle load hona zaroori hai -->
 <script src="pdf-chat.js"></script>
+<!-- ===== FEEDBACK MODAL ===== -->
+<div class="modal-overlay" id="feedbackModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.5 0-2.9-.32-4.13-.88L3 20l1.03-3.4C3.37 15.36 3 13.72 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        Share Your Feedback
+      </div>
+      <button class="modal-close" id="closeFeedback">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="feedback-intro">This project is new — your feedback helps us make it better!</p>
+
+      <input type="text" id="feedbackName" class="feedback-name-input" placeholder="Your name (optional)" maxlength="50" />
+
+      <div class="feedback-stars" id="feedbackStars">
+        <button type="button" class="star-btn" data-value="1">★</button>
+        <button type="button" class="star-btn" data-value="2">★</button>
+        <button type="button" class="star-btn" data-value="3">★</button>
+        <button type="button" class="star-btn" data-value="4">★</button>
+        <button type="button" class="star-btn" data-value="5">★</button>
+      </div>
+
+      <div class="feedback-category-row" id="feedbackCategoryRow">
+        <button type="button" class="feedback-cat-btn active" data-cat="general">💬 General</button>
+        <button type="button" class="feedback-cat-btn" data-cat="bug">🐛 Bug Report</button>
+        <button type="button" class="feedback-cat-btn" data-cat="feature">✨ Feature Request</button>
+      </div>
+
+      <textarea id="feedbackMessage" class="feedback-textarea" placeholder="Tell us what's working, what's not, or what you'd like to see..." rows="4"></textarea>
+
+      <button class="feedback-send-btn" id="feedbackSendBtn">Send Feedback</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FLOATING FEEDBACK BUTTON ===== -->
+<button class="feedback-fab" id="feedbackFab" title="Share Feedback">
+  <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.5 0-2.9-.32-4.13-.88L3 20l1.03-3.4C3.37 15.36 3 13.72 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+</button>
+
 <script src="app.js"></script>
 <script>
   // Settings modal theme toggle

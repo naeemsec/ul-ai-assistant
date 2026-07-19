@@ -88,11 +88,12 @@ ul-ai-assistant/
 
 3. Configure environment variables
    - Copy `.env.example` to `.env`
-   - Add your Gemini API key:
+   - Add your API keys:
      ```
-     GEMINI_API_KEY=your_api_key_here
-     GEMINI_MODEL=gemini-2.5-flash
+     GEMINI_API_KEY_1=your_api_key_here
+     GEMINI_MODEL=gemini-3.5-flash
      PORT=3000
+     ...
      ```
 
 4. Start the server

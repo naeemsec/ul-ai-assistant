@@ -6,6 +6,14 @@ We welcome bug fixes, UI improvements, new features, documentation updates, and 
 
 ---
 
+## Prerequisites
+
+Before contributing, make sure you have:
+
+- Git installed
+- Node.js installed
+- A GitHub account
+
 # 📋 Before You Start
 
 Please read these guidelines before contributing.
@@ -24,17 +32,19 @@ Please read these guidelines before contributing.
 
 Click the **Fork** button at the top-right corner of this repository.
 
-Give your repository name and This will create your own copy of the project.
+GitHub will create a copy of this project under your own account. You may keep the default repository name or choose a different one if you prefer.
 
 ---
 
 ## Step 2 — Clone Your Fork
 
-Clone your fork to your local machine.
+After creating your fork, clone **your own repository** to your local machine.
 
 ```bash
-git clone https://github.com/naeemsec/ul-ai-assistant.git
+git clone https://github.com/YOUR_GITHUB_USERNAME/UL-AI-Assistant.git
 ```
+
+Replace `YOUR_GITHUB_USERNAME` with your GitHub username.
 
 ---
 

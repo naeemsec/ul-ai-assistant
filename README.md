@@ -1,4 +1,5 @@
 # UL AI Assistant
+> Developed and maintained by **Boss Naeem** © 2026
 
 UL AI Assistant is an intelligent university chatbot designed to provide instant, accurate, and user-friendly answers to questions related to admissions, academics, departments, scholarships, campus facilities, and student services at the University of Layyah.
 
@@ -118,7 +119,11 @@ When deploying, set the `GEMINI_API_KEY` and `GEMINI_MODEL` as environment varia
 
 ## License
 
-This project is licensed under the ISC License.
+Copyright © 2026 Boss Naeem
+
+This project is licensed under the Apache License 2.0.
+
+See the [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing & Open Source Policy
 
@@ -129,3 +134,15 @@ Contributions, issues, and feature requests are welcome. Feel free to open an is
 Please note that the production deployment, API keys, server configuration, and other sensitive infrastructure are not included in this repository.
 
 All contributions are reviewed before being merged into the main branch.
+
+---
+
+## 👨‍💻 Author
+
+**Boss Naeem**
+
+Developer and maintainer of **UL AI Assistant**.
+
+If you have ideas, suggestions, or improvements, feel free to open an Issue or submit a Pull Request.
+
+© 2026 Boss Naeem. All rights reserved.

@@ -58,6 +58,8 @@ ul-ai-assistant/
 │   └── token-usage.json   # Count token usage/day
 ├── .env
 ├── .gitignore
+├── CONTRIBUTING.md
+├── LICENSE
 ├── package-lock.json
 ├── package.json
 └── README.md
@@ -118,6 +120,12 @@ When deploying, set the `GEMINI_API_KEY` and `GEMINI_MODEL` as environment varia
 
 This project is licensed under the ISC License.
 
-## Contributing
+## 🤝 Contributing & Open Source Policy
+
+UL AI Assistant is an open-source project that welcomes community contributions through Pull Requests.
 
 Contributions, issues, and feature requests are welcome. Feel free to open an issue or submit a pull request.
+
+Please note that the production deployment, API keys, server configuration, and other sensitive infrastructure are not included in this repository.
+
+All contributions are reviewed before being merged into the main branch.

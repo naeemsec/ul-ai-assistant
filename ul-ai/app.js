@@ -64,15 +64,6 @@ const closeAbout     = document.getElementById("closeAbout");
 const openAboutBtn   = document.getElementById("openAboutBtn");
 // NOTE: PDF Chat ke DOM refs, state, aur functions ab pdf-chat.js mein hain (alag file)
 
-// const ta = document.getElementById("messageInput");
-
-// ta.addEventListener("input", () => {
-//     console.log(
-//         "height =", ta.style.height,
-//         "scrollHeight =", ta.scrollHeight
-//     );
-// });
-
 // ===== INIT =====
 document.addEventListener("DOMContentLoaded", () => {
   loadSessions();
@@ -315,7 +306,7 @@ window.addEventListener("resize", () => {
     sidebarBackdrop.classList.remove("active");
   }
 });
- 
+  
 // ===== THEME =====
 function toggleTheme() {
   const html = document.documentElement;
@@ -1056,7 +1047,7 @@ async function parseJsonSafely(response) {
     console.error("[Non-JSON Response]", raw.slice(0, 300));
     throw new Error(
       response.status === 413
-        ? "PDF/message bohot bara hai (payload limit cross ho gaya)."
+        ? "PDF/message is too large (payload limit is crossed)."
         : response.status === 404
         ? "Server route nahi mila — server restart karna hoga."
         : `Server ne unexpected response diya (status ${response.status}).`

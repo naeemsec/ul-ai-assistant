@@ -467,33 +467,39 @@ function getQuotaResetTime() {
 const DAILY_TOKEN_BUDGET = 250000; // <-- yahan apna estimated daily token budget daalein
 const USAGE_FILE = path.join(__dirname, "token-usage.json");
 
-let dailyTokensUsed = 0;
+// Ab ek array mein poori history rakhte hain — [{date, used}, {date, used}, ...]
+// Purane din ka data kabhi overwrite/delete nahi hota, sirf AAJ ke din wali entry
+// update hoti hai. Isse aap chahen to purane dinon ka usage bhi analyze kar sakte hain.
+let usageHistory = [];
 let usageTrackerDatePT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
 
-// ===== Startup pe purana saved usage load karo (agar file mojood ho aur aaj ki hi ho) =====
+// ===== Startup pe purani saved history load karo =====
 try {
   if (fs.existsSync(USAGE_FILE)) {
     const saved = JSON.parse(fs.readFileSync(USAGE_FILE, "utf-8"));
-    if (saved.date === usageTrackerDatePT) {
-      dailyTokensUsed = saved.used || 0;
-      console.log(`✅ Token usage file se load hui: ${dailyTokensUsed} tokens (aaj, ${usageTrackerDatePT})`);
-    } else {
-      console.log("ℹ️ Purani usage file mili lekin purane din ki hai — 0 se shuru kar rahe hain.");
-    }
+    // Purane format (single object) se bhi migrate kar lo, agar kisi purani file mein wahi ho
+    usageHistory = Array.isArray(saved) ? saved : [saved];
+    console.log(`✅ Token usage history load hui — ${usageHistory.length} din ka record mila.`);
   }
 } catch (err) {
   console.error("⚠️ Token usage file load nahi ho saki:", err.message);
 }
 
-// ===== Har update ke baad file mein save karo (async, taake request slow na ho) =====
+// Aaj ke din ki entry dhoondo; na mile to nayi bana kar array mein add karo (purani entries chhu nahi
+function getTodayEntry() {
+  let entry = usageHistory.find((e) => e.date === usageTrackerDatePT);
+  if (!entry) {
+    entry = { date: usageTrackerDatePT, used: 0 };
+    usageHistory.push(entry);
+  }
+  return entry;
+}
+
+// ===== Har update ke baad poori history file mein save karo (async, taake request slow na ho) =====
 function saveUsageToFile() {
-  fs.writeFile(
-    USAGE_FILE,
-    JSON.stringify({ date: usageTrackerDatePT, used: dailyTokensUsed }),
-    (err) => {
-      if (err) console.error("⚠️ Token usage file save nahi ho saki:", err.message);
-    }
-  );
+  fs.writeFile(USAGE_FILE, JSON.stringify(usageHistory, null, 2), (err) => {
+    if (err) console.error("⚠️ Token usage file save nahi ho saki:", err.message);
+  });
 }
 
 // ============================================================
@@ -503,61 +509,61 @@ function saveUsageToFile() {
 // kho sakta hai. Iski jagah har feedback turant email ke through bhej dete hain,
 // taake koi bhi Render ki storage involve na ho — email Gmail ke apne inbox mein
 // hamesha ke liye surakshit rehta hai.
-const nodemailer = require("nodemailer");
-
-const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER; // aapka Gmail address
-const FEEDBACK_EMAIL_APP_PASSWORD = process.env.FEEDBACK_EMAIL_APP_PASSWORD; // Gmail App Password (16-char code)
+//
+// NOTE: Render free tier SMTP ports (25/465/587) block karta hai, isliye SMTP
+// (Nodemailer) ki jagah Brevo ki HTTP API use kar rahe hain — ye normal HTTPS
+// (port 443) se jati hai, jo kabhi block nahi hoti.
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER; // Brevo mein verified sender email
 const FEEDBACK_EMAIL_TO = process.env.FEEDBACK_EMAIL_TO || FEEDBACK_EMAIL_USER; // kisay bhejna hai (default: khud ko)
 
-let feedbackTransporter = null;
-
-if (FEEDBACK_EMAIL_USER && FEEDBACK_EMAIL_APP_PASSWORD) {
-  feedbackTransporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: {
-      user: FEEDBACK_EMAIL_USER,
-      pass: FEEDBACK_EMAIL_APP_PASSWORD,
-    },
-    family: 4, // IPv6 route Render pe unreachable hoti hai — IPv4 force karo
-  });
-} else {
-  console.error("⚠️ FEEDBACK_EMAIL_USER / FEEDBACK_EMAIL_APP_PASSWORD .env mein nahi mili — feedback emails nahi bhej payenge.");
+if (!BREVO_API_KEY || !FEEDBACK_EMAIL_USER) {
+  console.error("⚠️ BREVO_API_KEY / FEEDBACK_EMAIL_USER .env mein nahi mili — feedback emails nahi bhej payenge.");
 }
 
 async function sendFeedbackEmail(entry) {
-  if (!feedbackTransporter) {
+  if (!BREVO_API_KEY || !FEEDBACK_EMAIL_USER) {
     throw new Error("Email not configured on server.");
   }
 
   const categoryLabel = { general: "💬 General Feedback", bug: "🐛 Bug Report", feature: "✨ Feature Request" };
   const stars = "★".repeat(entry.rating) + "☆".repeat(5 - entry.rating);
 
-  await feedbackTransporter.sendMail({
-    from: `"UL AI Feedback" <${FEEDBACK_EMAIL_USER}>`,
-    to: FEEDBACK_EMAIL_TO,
-    subject: `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`,
-    text: `Rating: ${stars} (${entry.rating}/5)
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "api-key": BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { email: FEEDBACK_EMAIL_USER, name: "UL AI Feedback" },
+      to: [{ email: FEEDBACK_EMAIL_TO }],
+      subject: `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`,
+      textContent: `Rating: ${stars} (${entry.rating}/5)
 Category: ${categoryLabel[entry.category]}
 ${entry.name ? `Name: ${entry.name}\n` : ""}Time: ${new Date(entry.timestamp).toLocaleString()}
 Device: ${entry.deviceId || "unknown"}
 
 Message:
 ${entry.message || "(no message provided)"}`,
+    }),
   });
-}
 
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || `Brevo API Error ${response.status}`);
+  }
+}
 
 function trackTokenUsage(usageMetadata) {
   const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   if (todayPT !== usageTrackerDatePT) {
-    // Naya din (PT ke hisaab se, jahan Gemini quota bhi reset hota hai) — counter reset karo
-    dailyTokensUsed = 0;
-    usageTrackerDatePT = todayPT;
+    usageTrackerDatePT = todayPT; // naya din — purani entries history mein rehti hain
   }
+  const entry = getTodayEntry();
   if (usageMetadata?.totalTokenCount) {
-    dailyTokensUsed += usageMetadata.totalTokenCount;
+    entry.used += usageMetadata.totalTokenCount;
   }
   saveUsageToFile();
 }
@@ -565,12 +571,12 @@ function trackTokenUsage(usageMetadata) {
 function getUsageSnapshot() {
   const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   if (todayPT !== usageTrackerDatePT) {
-    dailyTokensUsed = 0;
     usageTrackerDatePT = todayPT;
     saveUsageToFile();
   }
-  const percent = Math.min(100, Math.round((dailyTokensUsed / DAILY_TOKEN_BUDGET) * 100));
-  return { used: dailyTokensUsed, limit: DAILY_TOKEN_BUDGET, percent };
+  const entry = getTodayEntry();
+  const percent = Math.min(100, Math.round((entry.used / DAILY_TOKEN_BUDGET) * 100));
+  return { used: entry.used, limit: DAILY_TOKEN_BUDGET, percent };
 }
 
 // ============================================================
@@ -959,21 +965,19 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
 // Frontend yahan POST karega: { rating: 1-5, category: "general"|"bug"|"feature", message, deviceId }
 app.post("/api/feedback", feedbackLimiter, async (req, res) => {
   try {
-    const { rating, category, message, deviceId, name} = req.body;
+    const { rating, category, message, deviceId } = req.body;
 
     const ratingNum = Number(rating);
     if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
       return res.status(400).json({ error: "Rating must be an integer between 1 and 5." });
     }
 
-    const safeName = typeof name === "string" ? name.trim().slice(0, 50) : "";
     const validCategories = ["general", "bug", "feature"];
     const safeCategory = validCategories.includes(category) ? category : "general";
 
     const safeMessage = typeof message === "string" ? message.trim().slice(0, 2000) : "";
 
     const entry = {
-      name: safeName,
       rating: ratingNum,
       category: safeCategory,
       message: safeMessage,

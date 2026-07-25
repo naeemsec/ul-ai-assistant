@@ -1096,6 +1096,18 @@ body.merit-mode .input-area {
   cursor: not-allowed;
 }
 
+/* ===== VOICE INPUT (mic button) ===== */
+.mic-btn.listening {
+  color: #ef4444;
+  animation: micPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+
 /* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }

@@ -307,6 +307,63 @@ window.addEventListener("resize", () => {
   }
 });
   
+// ===== VOICE INPUT (Web Speech API — Chrome/Edge/Safari mein kaam karta hai; =====
+// Firefox support nahi karta, is case mein button khud-ba-khud chhup jayega)
+const micBtn = document.getElementById("micBtn");
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if (!SpeechRecognitionAPI) {
+  micBtn.classList.add("hidden"); // browser support nahi karta — button hide
+} else {
+  const recognition = new SpeechRecognitionAPI();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  let isListening = false;
+
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.classList.add("listening");
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    micBtn.classList.remove("listening");
+  };
+
+  recognition.onerror = (event) => {
+    console.error("[Voice Input Error]", event.error);
+    isListening = false;
+    micBtn.classList.remove("listening");
+    if (event.error === "not-allowed") {
+      showToast("🎤 Microphone permission denied.");
+    } else if (event.error === "no-speech") {
+      showToast("🎤 Didn't catch that — try speaking right after tapping the mic.");
+    } else if (event.error !== "aborted") {
+      showToast("⚠️ Voice input failed. Please try again.");
+    }
+  };
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    messageInput.value = transcript;
+    autoResize(messageInput);
+  };
+
+  micBtn.addEventListener("click", () => {
+    if (isListening) {
+      recognition.stop();
+    } else {
+      messageInput.focus();
+      recognition.start();
+    }
+  });
+}
+
 // ===== THEME =====
 function toggleTheme() {
   const html = document.documentElement;

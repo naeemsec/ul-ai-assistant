@@ -1,5 +1,12 @@
-# UL AI Assistant
+# 🎓 UL AI Assistant
+> AI-powered assistant for the University of Layyah.
 > Developed and maintained by **Boss Naeem** © 2026
+
+## 🌐 Live Demo
+
+**Try it here:** https://ul-ai-ns5c.onrender.com/
+
+---
 
 UL AI Assistant is an intelligent university chatbot designed to provide instant, accurate, and user-friendly answers to questions related to admissions, academics, departments, scholarships, campus facilities, and student services at the University of Layyah.
 

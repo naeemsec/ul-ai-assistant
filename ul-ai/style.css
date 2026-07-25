@@ -1,6 +1,5 @@
 /* ===== RESET & BASE ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 :root {
   --bg-primary: #0f1117;
   --bg-secondary: #1a1d27;
@@ -816,8 +815,20 @@ body.merit-mode .input-area {
   border-radius: 14px;
   padding: 10px 12px 8px 14px;
   transition: border-color var(--transition), box-shadow var(--transition);
-  margin: 0px 25px 10px 25px;
+  max-width: 800px;
+  width: calc(100% - 50px);
+  margin: 0 auto 10px;
 }
+/* .input-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 12px 8px 14px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  margin: 0px 25px 10px 25px;
+} */
 
 .input-wrapper:focus-within {
   border-color: var(--accent);
@@ -957,16 +968,6 @@ body.merit-mode .input-area {
 .feedback-fab:hover {
   transform: scale(1.08);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-}
-
-@media (max-width: 640px) {
-  .feedback-fab {
-    bottom: auto;
-    top: 70px; /* topbar ke neeche — agar overlap ho to ye value adjust kar lein */
-    right: 12px;
-    width: 44px;
-    height: 44px;
-  }
 }
 
 /* ===== FEEDBACK MODAL CONTENTS ===== */
@@ -1540,7 +1541,7 @@ body.merit-mode .input-area {
     font-size: 14px;
   }
 
-  .send-btn, .input-icon-btn {
+  .send-btn, .feedback-fab, .input-icon-btn {
     width: 32px;
     height: 32px;
   }

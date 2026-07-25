@@ -234,6 +234,220 @@ body {
   text-overflow: ellipsis;
 }
 
+/* ================================================================
+   MERIT LIST CHECKER — styles
+   ================================================================ */
+
+.merit-search-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 500px;
+  margin: 24px auto 0;
+}
+.merit-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  margin-top: 4px;
+}
+.merit-select,
+.merit-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.18s;
+}
+.merit-select:focus,
+.merit-input:focus { border-color: var(--accent); }
+.merit-select option { background: var(--bg-secondary); color: var(--text-primary); }
+.merit-find-btn {
+  margin-top: 8px;
+  padding: 11px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.18s, transform 0.12s;
+}
+.merit-find-btn:hover { opacity: 0.88; }
+.merit-find-btn:active { transform: scale(0.98); }
+.merit-find-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.merit-result-area {
+  width: 100%;
+  max-width: 560px;
+  margin: 24px auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.merit-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.merit-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.merit-results-header {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  padding: 4px 2px;
+}
+.merit-results-header strong { color: var(--text-primary); }
+.merit-results-header em { color: var(--accent); font-style: normal; }
+.merit-result-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  text-align: left;
+}
+.merit-result-card.error,
+.merit-result-card.not-found { text-align: center; padding: 28px 20px; }
+.merit-result-card.found { border-left: 3px solid var(--accent); }
+.merit-result-icon { font-size: 32px; margin-bottom: 10px; }
+.merit-result-title { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.merit-result-msg { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
+.merit-result-hint { margin-top: 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.7; }
+.merit-result-hint a { color: var(--accent); }
+.merit-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.merit-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.merit-percent-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+.merit-card-list-tag {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: var(--bg-tertiary);
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+.merit-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  margin-bottom: 12px;
+}
+.merit-card-field { display: flex; flex-direction: column; gap: 2px; }
+.field-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.field-value { font-size: 14px; color: var(--text-primary); font-weight: 500; }
+.merit-lastdate {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.merit-lastdate strong { color: #d97706; }
+@media (max-width: 480px) {
+  .merit-card-grid { grid-template-columns: 1fr; gap: 8px; }
+  .merit-card-top { flex-direction: column; }
+}
+
+/* Merit List — Documents Tip */
+.merit-docs-tip {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 10px;
+}
+.merit-docs-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+.merit-docs-list {
+  margin: 0 0 10px 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+}
+.merit-docs-list li {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.merit-docs-deadline {
+  font-size: 12.5px;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 7px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+.merit-docs-deadline strong {
+  font-weight: 700;
+}
+.merit-docs-note {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.merit-docs-campus strong {
+  color: var(--accent);
+}
+.merit-campus-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Merit List mode mein input area hide */
+body.merit-mode .input-area {
+  display: none;
+}
+
 /* Sidebar collapsed ho to feature-nav bilkul hidden — strip pe kuch show nahi hoga */
 .sidebar.collapsed .feature-nav {
   display: none;
@@ -594,24 +808,15 @@ body {
 .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
 
 /* ===== INPUT AREA ===== */
-.input-area {
-  padding: 10px 20px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  flex-shrink: 0;
-}
-
 .input-wrapper {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 7px 10px 7px 16px;
+  padding: 10px 12px 8px 14px;
   transition: border-color var(--transition), box-shadow var(--transition);
-  max-width: 800px;
-  margin: 0 auto;
+  margin: 0px 25px 10px 25px;
 }
 
 .input-wrapper:focus-within {
@@ -620,7 +825,8 @@ body {
 }
 
 .message-input {
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   background: transparent;
   border: none;
   outline: none;
@@ -628,19 +834,70 @@ body {
   font-size: 14.5px;
   line-height: 1.5;
   resize: none;
+  height: 30px;
   min-height: 24px;
   max-height: 220px;
-  overflow-y: auto;
+  overflow-y: hidden;
   font-family: inherit;
   display: block;
-  box-sizing: border-box;
   word-break: break-word;
+  padding: 2px 0 8px;
 }
 
 .message-input::placeholder { color: var(--text-muted); }
 
 .message-input::-webkit-scrollbar { width: 3px; }
 .message-input::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ===== INPUT TOOLBAR ===== */
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  min-height: 34px;
+}
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.toolbar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.status-row { display: none; }
 
 .send-btn {
   width: 36px;
@@ -656,16 +913,22 @@ body {
   flex-shrink: 0;
   transition: all var(--transition);
   margin-bottom: 1px;
+  transform: rotate(90deg);
 }
 
-.send-btn:hover:not(:disabled) { background: var(--accent-hover); transform: scale(1.05); }
+.send-btn:hover:not(:disabled) 
+{ 
+  background: var(--accent-hover); 
+  transform: scale(1.05); 
+  transform: rotate(90deg);
+}
 .send-btn:disabled { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; }
 
 .input-hint {
   text-align: center;
   font-size: 11.5px;
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-bottom: 10px;
   max-width: 800px;
   margin-left: auto;
   margin-right: auto;
@@ -674,24 +937,21 @@ body {
 .input-hint a { color: var(--accent); text-decoration: none; }
 .input-hint a:hover { text-decoration: underline; }
 
-/* ===== FEEDBACK — FLOATING ACTION BUTTON ===== */
+/* ===== FEEDBACK ===== */
 .feedback-fab {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border: none;
   background: var(--accent);
   color: #fff;
-  border: none;
+  border-radius: 10px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
   transition: transform var(--transition), box-shadow var(--transition);
-  z-index: 500;
+  margin-bottom: 1px;
 }
 
 .feedback-fab:hover {
@@ -964,7 +1224,7 @@ body {
   align-items: center;
   gap: 6px;
   width: fit-content;
-  padding: 6px 12px;
+  padding: 11px 11px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

@@ -416,6 +416,143 @@ When a user uploads a PDF:
 10. Your goal is to help students understand the document, not merely quote it.
 `;
 
+// ============================================================
+// MERIT LIST — LIVE DATA (ul.edu.pk se seedha, koi static data nahi)
+// ============================================================
+const cheerio = require("cheerio");
+
+const MERIT_INDEX_URL = "https://ul.edu.pk/program_merit_list";
+const MERIT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minute cache — university site pe zyada load na daalein
+
+let meritIndexCache = { data: null, fetchedAt: 0 };
+
+async function fetchMeritListIndex() {
+  const now = Date.now();
+  if (meritIndexCache.data && now - meritIndexCache.fetchedAt < MERIT_CACHE_TTL_MS) {
+    return meritIndexCache.data;
+  }
+
+  const response = await fetch(MERIT_INDEX_URL);
+  if (!response.ok) throw new Error(`Merit list index fetch failed: ${response.status}`);
+  const html = await response.text();
+  const $ = cheerio.load(html);
+
+  const entries = [];
+  $("table").each((_, table) => {
+    $(table)
+      .find("tbody tr")
+      .each((_, row) => {
+        const cells = $(row).find("td");
+        if (cells.length < 7) return; // expected columns nahi milay, skip
+
+        const createdDate = $(cells[1]).text().trim();
+        const program = $(cells[2]).text().trim();
+        const shift = $(cells[3]).text().trim();
+        const quota = $(cells[4]).text().trim();
+        const meritListNumber = $(cells[5]).text().trim();
+        const lastDate = $(cells[6]).text().trim();
+        const detailUrl = $(cells[7]).find("a").attr("href") || "";
+
+        if (program) {
+          entries.push({ createdDate, program, shift, quota, meritListNumber, lastDate, detailUrl });
+        }
+      });
+  });
+
+  meritIndexCache = { data: entries, fetchedAt: now };
+  return entries;
+}
+
+async function fetchMeritListDetail(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Merit list detail fetch failed: ${response.status}`);
+  const html = await response.text();
+  const $ = cheerio.load(html);
+
+
+  // Instructions parse karo — campus location aur deadline yahan hoti hai
+  let instructions = {
+    campus: null,
+    deadline: null,
+    rawText: null,
+  };
+
+  // Page pe jo bhi paragraph/list text hai usse dhundo
+  const pageText = $("body").text();
+
+  // Campus detect karo
+  if (/Main\s+Campus/i.test(pageText)) {
+    instructions.campus = "Main Campus";
+  } else if (/City\s+Campus/i.test(pageText)) {
+    instructions.campus = "City Campus";
+  } else if (/Library/i.test(pageText)) {
+    const libMatch = pageText.match(/(?:visit|report to|come to)[^.]*library[^.]*/i);
+    instructions.campus = libMatch ? libMatch[0].trim() : "Library";
+  }
+
+  // Deadline detect karo (agar entry se alag ho)
+  const dateMatch = pageText.match(/on\s+or\s+before\s+([\d\-\/]+(?:\s+\w+\s+\d{4})?)/i);
+  if (dateMatch) instructions.deadline = dateMatch[1].trim();
+
+  instructions.rawText = pageText.slice(0, 1000);
+
+  const rows = [];
+  $("table tbody tr").each((_, row) => {
+    const cells = $(row).find("td");
+    if (cells.length < 9) return;
+
+    rows.push({
+      srNo: $(cells[0]).text().trim(),
+      formNo: $(cells[1]).text().trim(),
+      studentName: $(cells[2]).text().trim(),
+      fatherName: $(cells[3]).text().trim(),
+      interObtain: $(cells[4]).text().trim(),
+      interTotal: $(cells[5]).text().trim(),
+      matricObtain: $(cells[6]).text().trim(),
+      matricTotal: $(cells[7]).text().trim(),
+      hafizQuran: $(cells[8]).text().trim(),
+      meritPercent: cells[9] ? $(cells[9]).text().trim() : "",
+    });
+  });
+
+  return { rows, instructions };
+}
+
+// Keywords se detect karte hain ke normal chat ka sawal merit-list ke baare mein hai
+const MERIT_KEYWORDS = [
+  "merit list", "merit lists", "1st merit", "2nd merit", "3rd merit", "first merit",
+  "second merit", "third merit", "merit aa", "list aa", "list nikal", "result aa",
+  "selected list", "provisional",
+];
+
+function isMeritListQuery(messages) {
+  const recentText = messages.slice(-4).map((m) => m.content).join(" ").toLowerCase();
+  return MERIT_KEYWORDS.some((keyword) => recentText.includes(keyword));
+}
+
+// Live status ko AI ke context ke liye readable summary mein badalte hain
+async function buildMeritListContext() {
+  try {
+    const entries = await fetchMeritListIndex();
+    if (entries.length === 0) {
+      return `\n\nLIVE MERIT LIST STATUS (fetched just now from ul.edu.pk):
+No merit lists are currently published on the website.`;
+    }
+
+    const summary = entries
+      .map((e) => `- ${e.program} (${e.shift}, ${e.quota}): ${e.meritListNumber} — created ${e.createdDate}, confirm admission by ${e.lastDate}`)
+      .join("\n");
+
+    return `\n\nLIVE MERIT LIST STATUS (fetched just now from ul.edu.pk — this is REAL, current data. Answer directly and confidently from it. NEVER say you don't have access to live data or documents — you DO, it's right here):
+${summary}
+
+IMPORTANT: If a student wants to search for their own name/result, do NOT try to search it yourself in the chat. Tell them clearly to use the "Merit List Checker" in the sidebar (left menu) — they can pick their program there and instantly find their result.`;
+  } catch (err) {
+    console.error("[Merit List Context Error]", err);
+    return `\n\nLIVE MERIT LIST STATUS: Could not reach ul.edu.pk right now. Tell the student to check https://ul.edu.pk/program_merit_list directly, or try again in a moment.`;
+  }
+}
+
 // ===== QUOTA RESET TIME CALCULATOR =====
 // Gemini free tier quota midnight PT (Pacific Time) par reset hota hai.
 // Yeh function woh exact instant nikal kar Pakistan Time (PKT) mein convert karta hai.
@@ -513,46 +650,87 @@ function saveUsageToFile() {
 // NOTE: Render free tier SMTP ports (25/465/587) block karta hai, isliye SMTP
 // (Nodemailer) ki jagah Brevo ki HTTP API use kar rahe hain — ye normal HTTPS
 // (port 443) se jati hai, jo kabhi block nahi hoti.
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER; // Brevo mein verified sender email
-const FEEDBACK_EMAIL_TO = process.env.FEEDBACK_EMAIL_TO || FEEDBACK_EMAIL_USER; // kisay bhejna hai (default: khud ko)
+const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER; // wahi Gmail account jisse refresh token banaya
+const FEEDBACK_EMAIL_TO = process.env.FEEDBACK_EMAIL_TO || FEEDBACK_EMAIL_USER;
 
-if (!BREVO_API_KEY || !FEEDBACK_EMAIL_USER) {
-  console.error("⚠️ BREVO_API_KEY / FEEDBACK_EMAIL_USER .env mein nahi mili — feedback emails nahi bhej payenge.");
+if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
+  console.error("⚠️ Gmail API credentials .env mein nahi mili — feedback emails nahi bhej payenge.");
 }
 
+// Refresh token se ek naya (short-lived) access token lete hain — ye har email se pehle karna
+// hota hai, kyunke access tokens sirf ~1 ghante ke liye valid hote hain, refresh token permanent hai.
+async function getGmailAccessToken() {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: GMAIL_CLIENT_ID,
+      client_secret: GMAIL_CLIENT_SECRET,
+      refresh_token: GMAIL_REFRESH_TOKEN,
+      grant_type: "refresh_token",
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error_description || "Failed to get Gmail access token");
+  return data.access_token;
+}
+
+function base64UrlEncode(str) {
+  return Buffer.from(str).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// Email HEADERS (Subject waghera) sirf ASCII support karte hain — emoji/em-dash jese
+// non-ASCII characters ko RFC 2047 "encoded-word" format mein encode karna zaroori hai,
+// warna Gmail jese clients unhe galat interpret kar ke garbage dikhate hain.
+function encodeMimeHeader(str) {
+  return `=?UTF-8?B?${Buffer.from(str, "utf-8").toString("base64")}?=`;
+}
+
+// Gmail ki apni official API — asal mein Gmail se seedha bhejta hai (koi third-party
+// relay nahi), isliye "freemail sender via relay" wala deliverability issue hi nahi aata.
+// HTTPS API hai, isliye Render ka SMTP-port-block bhi masla nahi karta.
 async function sendFeedbackEmail(entry) {
-  if (!BREVO_API_KEY || !FEEDBACK_EMAIL_USER) {
+  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
     throw new Error("Email not configured on server.");
   }
 
   const categoryLabel = { general: "💬 General Feedback", bug: "🐛 Bug Report", feature: "✨ Feature Request" };
   const stars = "★".repeat(entry.rating) + "☆".repeat(5 - entry.rating);
-
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "api-key": BREVO_API_KEY,
-    },
-    body: JSON.stringify({
-      sender: { email: FEEDBACK_EMAIL_USER, name: "UL AI Feedback" },
-      to: [{ email: FEEDBACK_EMAIL_TO }],
-      subject: `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`,
-      textContent: `Rating: ${stars} (${entry.rating}/5)
+  const subject = `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`;
+  const bodyText = `Rating: ${stars} (${entry.rating}/5)
 Category: ${categoryLabel[entry.category]}
 ${entry.name ? `Name: ${entry.name}\n` : ""}Time: ${new Date(entry.timestamp).toLocaleString()}
 Device: ${entry.deviceId || "unknown"}
 
 Message:
-${entry.message || "(no message provided)"}`,
-    }),
+${entry.message || "(no message provided)"}`;
+
+  const rawMessage = [
+    `From: "UL AI Feedback" <${FEEDBACK_EMAIL_USER}>`,
+    `To: ${FEEDBACK_EMAIL_TO}`,
+    `Subject: ${encodeMimeHeader(subject)}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    "",
+    bodyText,
+  ].join("\n");
+
+  const accessToken = await getGmailAccessToken();
+
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw: base64UrlEncode(rawMessage) }),
   });
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.message || `Brevo API Error ${response.status}`);
+    throw new Error(errData.error?.message || `Gmail API Error ${response.status}`);
   }
 }
 
@@ -638,6 +816,7 @@ async function callGroqChat(messages, userName) {
     ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
     : "";
   const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
+  const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
 
   async function attemptGroqCall(historyLimit) {
     // Groq ki TPM limit Gemini se kaafi chhoti hai — lambi conversations mein poori
@@ -646,7 +825,7 @@ async function callGroqChat(messages, userName) {
     const trimmedMessages = messages.slice(-historyLimit);
 
     const groqMessages = [
-      { role: "system", content: UNIVERSITY_CONTEXT + feeContext + userNameNote },
+      { role: "system", content: UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote },
       ...trimmedMessages.map((m) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.content,
@@ -800,7 +979,8 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
         // Fee-related sawal ho tabhi FEE_CONTEXT jodo — taake normal messages mein
         // ye bara fee data na jaye aur token usage kam rahe.
         const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
-        const contextWithName = UNIVERSITY_CONTEXT + feeContext + userNameNote;
+         const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
+        const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY_1}`;
 
@@ -965,7 +1145,7 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
 // Frontend yahan POST karega: { rating: 1-5, category: "general"|"bug"|"feature", message, deviceId }
 app.post("/api/feedback", feedbackLimiter, async (req, res) => {
   try {
-    const { rating, category, message, deviceId } = req.body;
+    const { rating, category, message, deviceId, name } = req.body;
 
     const ratingNum = Number(rating);
     if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
@@ -975,9 +1155,11 @@ app.post("/api/feedback", feedbackLimiter, async (req, res) => {
     const validCategories = ["general", "bug", "feature"];
     const safeCategory = validCategories.includes(category) ? category : "general";
 
+    const safeName = typeof name === "string" ? name.trim().slice(0, 50) : "";
     const safeMessage = typeof message === "string" ? message.trim().slice(0, 2000) : "";
 
     const entry = {
+      name: safeName,
       rating: ratingNum,
       category: safeCategory,
       message: safeMessage,
@@ -991,6 +1173,65 @@ app.post("/api/feedback", feedbackLimiter, async (req, res) => {
   } catch (err) {
     console.error("[Server Error - Feedback]", err);
     res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
+  }
+});
+
+// ===== MERIT LIST CHECKER — programs list =====
+app.get("/api/merit-programs", async (req, res) => {
+  try {
+    const entries = await fetchMeritListIndex();
+    const programs = [...new Set(entries.map((e) => e.program))].sort();
+    res.json({ programs });
+  } catch (err) {
+    console.error("[Server Error - Merit Programs]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "Could not load programs.") });
+  }
+});
+
+// ===== MERIT LIST CHECKER — deterministic search (koi AI involved nahi) =====
+app.post("/api/merit-search", async (req, res) => {
+  try {
+    const { program, query } = req.body;
+
+    if (!program || typeof program !== "string") {
+      return res.status(400).json({ error: "Program is required." });
+    }
+    if (!query || typeof query !== "string" || query.trim().length === 0) {
+      return res.status(400).json({ error: "Please enter your name or form number." });
+    }
+
+    const entries = await fetchMeritListIndex();
+    const matchingEntries = entries.filter((e) => e.program === program);
+
+    if (matchingEntries.length === 0) {
+      return res.json({ found: false, message: `No merit list has been published yet for ${program}.` });
+    }
+
+    const searchTerm = query.trim().toLowerCase();
+    const allMatches = [];
+
+    for (const entry of matchingEntries) {
+      if (!entry.detailUrl) continue;
+       const { rows, instructions } = await fetchMeritListDetail(entry.detailUrl);
+      const matches = rows.filter(
+        (r) => r.formNo.toLowerCase() === searchTerm || r.studentName.toLowerCase().includes(searchTerm)
+      );
+      matches.forEach((m) =>
+        allMatches.push({ ...m, meritListNumber: entry.meritListNumber, shift: entry.shift, lastDate: entry.lastDate, campus: instructions.campus, deadline: instructions.deadline })
+      );
+    }
+
+    if (allMatches.length === 0) {
+      return res.json({
+        found: false,
+        message: `No match found for "${query}" in ${program}'s published merit list(s). This could mean you weren't selected in this list yet, or there's a typo,  double check your Form No.`,
+      });
+    }
+
+    res.json({ found: true, matches: allMatches });
+  } catch (err) {
+    console.error("[Server Error - Merit Search]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "Search failed.") });
   }
 });
 

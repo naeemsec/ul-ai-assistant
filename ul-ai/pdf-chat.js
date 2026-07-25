@@ -108,6 +108,9 @@ async function extractPdfText(file) {
 
 // ===== PDF CHAT MODE =====
 function enterPdfChatMode() {
+  // Kisi aur mode (jaise Merit List Checker) se aa rahe hain to uska poora cleanup kar do
+  if (typeof exitMeritListMode === "function") exitMeritListMode();
+
   pdfChatMode = true;
   clearMessages();
   showWelcome(false);
@@ -125,7 +128,8 @@ function enterPdfChatMode() {
   closeSidebarMobile();
   messageInput.focus();
 
-  // Highlight PDF Chat button, hata do "Recent Chats" wali active highlight
+  // Saare feature buttons ki active state hatao, phir sirf isi ek ki lagao
+  document.querySelectorAll(".feature-btn").forEach(btn => btn.classList.remove("active"));
   pdfChatBtn.classList.add("active");
   document.querySelectorAll(".history-item-wrap.active").forEach(el => el.classList.remove("active"));
   messageInput.placeholder = "Ask anything about your PDF...";
@@ -163,7 +167,7 @@ function showPdfRestartBtn() {
     btn = document.createElement("button");
     btn.id = "pdfRestartBtn";
     btn.className = "pdf-restart-btn";
-    btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> New PDF Chat`;
+    btn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>`;
     btn.addEventListener("click", resetPdfChat);
     // Status row ke right column mein lagao (ek hi line mein chip — usage bar — ye button)
     document.getElementById("statusRowRight").appendChild(btn);

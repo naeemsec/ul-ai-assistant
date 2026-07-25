@@ -187,7 +187,7 @@ function setupEventListeners() {
   });
 
   // ===== FEATURE NAV BUTTONS (Past Paper Analyzer / Smart Notes+Quiz / GPA Calculator — coming soon) =====
-  document.querySelectorAll(".feature-btn:not(#pdfChatBtn)").forEach((btn) => {
+  document.querySelectorAll(".feature-btn:not(#pdfChatBtn):not(#meritListBtn)").forEach((btn) => {
     btn.addEventListener("click", () => {
       showToast(`🚧 ${btn.dataset.feature} is currently under development. It will be available soon!`);
     });
@@ -451,6 +451,8 @@ function saveSessions() {
 function startNewChat() {
   exitPdfChatMode();
 
+  if (typeof exitMeritListMode === "function") exitMeritListMode();
+  
   // Agar current session already empty hai to naya mat banao
   const existing = getSession();
   if (existing && existing.messages.length === 0) {
@@ -475,6 +477,8 @@ function startNewChat() {
  
 function switchSession(id) {
   exitPdfChatMode();
+  if (typeof exitMeritListMode === "function") exitMeritListMode();
+
   currentSessionId = id;
   const session = getSession();
   clearMessages();
@@ -1016,15 +1020,10 @@ Let me notify **Boss Naeem** about this issue. He will investigate it as soon as
  
 // TOKEN USAGE BAR (backend /api/usage aur response.usage se update hoti hai)
 function updateTokenUsageBar(usage) {
-  const trackEl = document.getElementById("tokenUsageTrack");
   const pctEl = document.getElementById("tokenUsagePct");
-  if (!trackEl || !pctEl || !usage) return;
+  if (!pctEl || !usage) return;
 
-  const totalBars = 20;
   const percent = Math.max(0, Math.min(100, usage.percent ?? 0));
-  const filledBars = Math.round((percent / 100) * totalBars);
-
-  trackEl.textContent = "█".repeat(filledBars) + "░".repeat(totalBars - filledBars);
   pctEl.textContent = `${percent}% Used`;
 }
 

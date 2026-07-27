@@ -1,9 +1,5 @@
 // ============================================================
 // PDF CHAT — poora feature isi file mein hai (app.js se alag)
-// Isay app.js se PEHLE load hona chahiye (index.html mein <script>
-// order dekhein), taake iske variables/functions dusre scripts ko
-// available hon.
-//
 // Ye file app.js ke shared helpers use karti hai (jo global scope
 // mein already maujood hain): showToast, renderMessage, clearMessages,
 // showWelcome, closeSidebarMobile, renderHistory, getDeviceId,
@@ -22,7 +18,7 @@ let pdfChatMode = false;
 let attachedPdfFile = null;
 let attachedPdfText = null;
 let isExtractingPdf = false;
-let pdfChatMessages = []; // PDF chat ka apna alag messages store — normal sessions se bilkul alag
+let pdfChatMessages = [];
 
 // pdf.js worker setup (CDN se load hui hai)
 if (window.pdfjsLib) {
@@ -31,12 +27,11 @@ if (window.pdfjsLib) {
 
 // ===== EVENT LISTENERS SETUP =====
 function setupPdfChatListeners() {
-  // ===== PDF CHAT BUTTON =====
   pdfChatBtn.addEventListener("click", enterPdfChatMode);
 
   // ===== ATTACH (PDF) BUTTON — sirf PDF Chat mode mein kaam karta hai =====
   attachBtn.addEventListener("click", () => {
-    if (!pdfChatMode) return; // safety guard — button already disabled rehta hai normal chat mein
+    if (!pdfChatMode) return;
     pdfFileInput.click();
   });
 
@@ -72,7 +67,6 @@ function setupPdfChatListeners() {
         setAttachedFileStatus("error");
         attachedPdfText = null;
       } else {
-        // Safety cap — bohot lambi PDF ho to sirf shuru ka hissa bhejo (quota bachane ke liye)
         const MAX_CHARS = 60000;
         attachedPdfText = text.length > MAX_CHARS
           ? text.slice(0, MAX_CHARS) + "\n\n[...PDF bohot lambi hai, sirf shuru ka hissa include kiya gaya hai...]"
@@ -119,10 +113,9 @@ function enterPdfChatMode() {
   if (pdfChatMessages.length > 0) {
     pdfChatScreen.classList.add("hidden"); // guidelines mat dikhao, messages dikhao
     pdfChatMessages.forEach(m => renderMessage(m.role, m.content));
-    // Restart button dikhao (sirf PDF chat mein)
     showPdfRestartBtn();
   } else {
-    pdfChatScreen.classList.remove("hidden"); // pehli baar — guidelines dikhao
+    pdfChatScreen.classList.remove("hidden");
   }
 
   closeSidebarMobile();
@@ -134,7 +127,6 @@ function enterPdfChatMode() {
   document.querySelectorAll(".history-item-wrap.active").forEach(el => el.classList.remove("active"));
   messageInput.placeholder = "Ask anything about your PDF...";
 
-  // Attach button sirf PDF Chat mode mein enable hota hai
   attachBtn.disabled = false;
   attachBtn.title = "Attach PDF";
 }
@@ -144,8 +136,6 @@ function exitPdfChatMode() {
   pdfChatMode = false;
   pdfChatScreen.classList.add("hidden");
 
-  // User ne kaha: normal chat mein PDF ka koi mahol nahi rehna chahiye — isliye
-  // attached PDF (file + text + chip) aur uski poori conversation yahan clear kar dete hain.
   pdfChatMessages = [];
   clearAttachedFile();
   hidePdfRestartBtn();
@@ -181,7 +171,6 @@ function hidePdfRestartBtn() {
 }
 
 function resetPdfChat() {
-  // PDF chat bilkul fresh start
   pdfChatMessages = [];
   clearMessages();
   clearAttachedFile();

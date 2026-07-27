@@ -447,6 +447,110 @@ body.merit-mode .input-area {
   display: none;
 }
 
+/* ===== PAST PAPER ANALYZER ===== */
+.paper-list-area {
+  width: calc(100% - 40px);
+  max-width: 960px;
+  margin: 20px auto 0;
+}
+
+.paper-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.paper-table th {
+  text-align: center;
+  font-weight: bold;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.paper-table td {
+  padding: 12px 14px;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.paper-row {
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.paper-row:hover {
+  background: var(--bg-hover);
+}
+
+.paper-row:last-child td {
+  border-bottom: none;
+}
+
+.paper-preview-area {
+  width: calc(100% - 40px);
+  max-width: 960px;
+  margin: 20px auto 0;
+}
+
+.paper-preview-header {
+  text-align: right;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.paper-preview-header a {
+  color: #fff;
+  background: var(--accent);
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.paper-preview-header a:hover {
+  opacity: 0.85;
+}
+
+.paper-preview-frame {
+  width: 100%;
+  height: 75vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* Past Paper badges */
+.paper-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.paper-badge.mid   { background: rgba(99,102,241,0.15); color: var(--accent); }
+.paper-badge.final { background: rgba(239,68,68,0.12);  color: #ef4444; }
+.paper-badge.quiz  { background: rgba(245,158,11,0.12); color: #d97706; }
+
+.paper-view-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+.paper-view-btn:hover { background: var(--accent); color: #fff; }
+
+/* Past paper mode — input hide */
+body.past-paper-mode .input-area { display: none; }
+
 /* Sidebar collapsed ho to feature-nav bilkul hidden — strip pe kuch show nahi hoga */
 .sidebar.collapsed .feature-nav {
   display: none;
@@ -819,16 +923,6 @@ body.merit-mode .input-area {
   width: calc(100% - 50px);
   margin: 0 auto 10px;
 }
-/* .input-wrapper {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 10px 12px 8px 14px;
-  transition: border-color var(--transition), box-shadow var(--transition);
-  margin: 0px 25px 10px 25px;
-} */
 
 .input-wrapper:focus-within {
   border-color: var(--accent);
@@ -1099,6 +1193,12 @@ body.merit-mode .input-area {
 /* ===== VOICE INPUT (mic button) ===== */
 .mic-btn.listening {
   color: #ef4444;
+  animation: micPulse 1.2s ease-in-out infinite;
+}
+
+/* ===== VOICE OUTPUT (speaker button "speaking" state) ===== */
+.speaker-btn.speaking {
+  color: var(--accent);
   animation: micPulse 1.2s ease-in-out infinite;
 }
 
@@ -1848,9 +1948,33 @@ select.setting-input { cursor: pointer; }
 }
 .about-link:hover { color: var(--accent); }
 
-/* ===== ABOUT MODAL BODY ===== */
-.about-body { text-align: center; padding: 24px 20px; }
+/* ===== SETTINGS MODAL — SECTION ORGANIZATION ===== */
+.settings-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin: 4px 0 10px;
+}
 
+.setting-select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.setting-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.about-body { text-align: center; padding: 24px 20px; }
 .about-logo {
   width: 64px;
   height: 64px;
@@ -1864,7 +1988,7 @@ select.setting-input { cursor: pointer; }
   color: #fff;
   margin: 0 auto 14px;
   box-shadow: 0 6px 24px var(--accent-glow);
-}
+} 
 .about-uni-name {
   font-size: 20px;
   font-weight: 700;

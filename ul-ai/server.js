@@ -9,10 +9,6 @@ const rateLimit = require("express-rate-limit")
 const app = express();
 
 // ===== TRUST PROXY =====
-// Agar app kisi reverse proxy/hosting service (Render, Railway, Vercel, Nginx, Cloudflare, waghera)
-// ke peeche deploy hai, to yeh zaroori hai — warna Express ko real client IP kabhi nahi milega,
-// aur sab requests ek hi (proxy ka) IP jese dikhengi (jo humara asal bug tha).
-// "1" ka matlab hai: ek hop trust karo (jo aam PaaS setups ke liye sahi hai).
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
@@ -22,16 +18,12 @@ const PORT = process.env.PORT || 3000;
 // jane chahiye — ye ek attacker ko system ke internals ka clue de sakte hain.
 // Development/Beta mein poora detail milta hai taake debugging aasan ho.
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-//const IS_PRODUCTION = "development";
-
 function sanitizeError(rawMessage) {
   if (IS_PRODUCTION) {
     return "An internal error occurred. Please try again in a moment.";
   }
   return rawMessage;
 }
-// Main university chat ke liye alag key, PDF Chat ke liye alag key — dono ka
-// quota independent rahega, ek dusre ko touch nahi karega.
 const GEMINI_API_KEY_1 = process.env.GEMINI_API_KEY_1;
 const PDF_API_KEY = process.env.PDF_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -43,21 +35,20 @@ if (!PDF_API_KEY) {
   console.error("❌ PDF_API_KEY .env file mein nahi mili — PDF Chat kaam nahi karega.");
 }
 
-// ===== GROQ (BACKUP MODEL — SIRF NORMAL CHAT KE LIYE, PDF Chat ko touch nahi karta) =====
-// Jab Gemini ki (bohot chhoti, ~5/din) free limit khatam ho jaye, normal university chat
-// automatically Groq pe switch ho jata hai taake user ko turant error na mile.
+// ===== GROQ (BACKUP MODEL) =====
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 if (!GROQ_API_KEY) {
   console.error("⚠️ GROQ_API_KEY .env file mein nahi mili — Gemini ki limit khatam hone par backup kaam nahi karega.");
 }
 
-// ===== UNIVERSITY CONTEXT — backend mein, frontend ko nazar nahi aata =====
 const UNIVERSITY_CONTEXT = `
 You are UL AI — the official AI assistant for the University of Layyah (ul.edu.pk), located in Layyah, Punjab, Pakistan.
 
 Your primary role is to help students, faculty, and visitors with everything related to the University of Layyah. Always be helpful, respectful, and accurate.
+
+Sometime Call student/user name in the chat while giving answers.
 
 KEY INFORMATION ABOUT UNIVERSITY OF LAYYAH:
 - Official Website: https://ul.edu.pk
@@ -254,9 +245,7 @@ BEHAVIOR GUIDELINES:
 - If you don't know a specific detail (like exact fee amounts), say so honestly and direct them to the official website.
 `;
 
-// ===== FEE CONTEXT (alag rakha hai — sirf fee-related sawal par UNIVERSITY_CONTEXT ke =====
-// sath jodte hain, taake har normal message ke sath ye bara fee data na jaye aur
-// token usage kam ho. Dekho isFeeRelatedQuery() aur uska use /api/chat mein.)
+// ===== FEE CONTEXT =====
 const FEE_CONTEXT = `
 FEE STRUCTURE — BEHAVIOR RULE (IMPORTANT):
 University of Layyah has 4 program categories, each with a DIFFERENT fee structure:
@@ -381,8 +370,6 @@ NOTE: This fee data is for Session 2026. If a student asks about a different adm
 `;
 
 // Fee-related sawal detect karne ke liye simple keyword check — English + Roman Urdu dono.
-// False-positive (kabhi kabhi zaroorat na hone par bhi include ho jana) theek hai, koi
-// nuksan nahi; false-negative (fee context miss ho jana) se bachna zyada zaroori hai.
 const FEE_KEYWORDS = [
   "fee", "fees", "tuition", "cost", "charges", "dues", "installment",
   "kharcha", "kharche", "paisa", "paise", "fee structure",
@@ -391,14 +378,11 @@ const FEE_KEYWORDS = [
 ];
 
 function isFeeRelatedQuery(messages) {
-  // Last 4 messages check karo (sirf latest question nahi) — taake agar AI ne
-  // pehle "kis category?" poocha ho aur student sirf "CS, morning" reply kare
-  // (jisme "fee" lafz na ho), tab bhi context sahi mile.
   const recentText = messages.slice(-4).map((m) => m.content).join(" ").toLowerCase();
   return FEE_KEYWORDS.some((keyword) => recentText.includes(keyword));
 }
 
-// ===== PDF CHAT — SYSTEM PROMPT (ab /api/pdf-chat endpoint isay use karta hai) =====
+// ===== PDF CHAT — SYSTEM PROMPT =====
 const PDF_CHAT_SYSTEM_PROMPT = `
 You are UL AI Assistant's PDF Learning Assistant.
 Your job is to answer questions strictly using the uploaded PDF as the primary source of truth.
@@ -469,18 +453,14 @@ async function fetchMeritListDetail(url) {
   const html = await response.text();
   const $ = cheerio.load(html);
 
-
-  // Instructions parse karo — campus location aur deadline yahan hoti hai
   let instructions = {
     campus: null,
     deadline: null,
     rawText: null,
   };
 
-  // Page pe jo bhi paragraph/list text hai usse dhundo
   const pageText = $("body").text();
 
-  // Campus detect karo
   if (/Main\s+Campus/i.test(pageText)) {
     instructions.campus = "Main Campus";
   } else if (/City\s+Campus/i.test(pageText)) {
@@ -490,7 +470,6 @@ async function fetchMeritListDetail(url) {
     instructions.campus = libMatch ? libMatch[0].trim() : "Library";
   }
 
-  // Deadline detect karo (agar entry se alag ho)
   const dateMatch = pageText.match(/on\s+or\s+before\s+([\d\-\/]+(?:\s+\w+\s+\d{4})?)/i);
   if (dateMatch) instructions.deadline = dateMatch[1].trim();
 
@@ -518,7 +497,6 @@ async function fetchMeritListDetail(url) {
   return { rows, instructions };
 }
 
-// Keywords se detect karte hain ke normal chat ka sawal merit-list ke baare mein hai
 const MERIT_KEYWORDS = [
   "merit list", "merit lists", "1st merit", "2nd merit", "3rd merit", "first merit",
   "second merit", "third merit", "merit aa", "list aa", "list nikal", "result aa",
@@ -530,7 +508,6 @@ function isMeritListQuery(messages) {
   return MERIT_KEYWORDS.some((keyword) => recentText.includes(keyword));
 }
 
-// Live status ko AI ke context ke liye readable summary mein badalte hain
 async function buildMeritListContext() {
   try {
     const entries = await fetchMeritListIndex();
@@ -554,16 +531,12 @@ IMPORTANT: If a student wants to search for their own name/result, do NOT try to
 }
 
 // ===== QUOTA RESET TIME CALCULATOR =====
-// Gemini free tier quota midnight PT (Pacific Time) par reset hota hai.
-// Yeh function woh exact instant nikal kar Pakistan Time (PKT) mein convert karta hai.
 function getQuotaResetTime() {
   const now = new Date();
  
-  // "Agar abhi Pacific Time mein date/time kya hai" — yeh string nikalo
   const ptString = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
   const ptNow = new Date(ptString);
  
-  // Agla midnight PT (yaani PT ke hisaab se "kal ka 12:00 AM")
   const nextMidnightPT = new Date(ptNow);
   nextMidnightPT.setHours(24, 0, 0, 0);
  
@@ -587,34 +560,16 @@ function getQuotaResetTime() {
 // ============================================================
 // TOKEN USAGE TRACKER (permanent) — file mein persist hota hai
 // ============================================================
-// Ye Google ke asal account-level quota se LIVE sync nahi hai — sirf humara apna
-// tracked estimate hai, jo Gemini ke har response ke "usageMetadata" se count karta hai.
-// Ye sirf ek helpful andaza/dashboard hai — Google ka real quota isse bilkul independent
-// hai (upar chat mein detail se explain kiya gaya hai).
-//
-// File mein isliye save karte hain taake server restart (Ctrl+C, crash, redeploy) hone par
-// bhi aaj ka count na kho jaye.
-//
-// NOTE (Render free tier): Render ka free plan ephemeral filesystem use karta hai — matlab
-// agar aap naya code deploy karte hain (git push se redeploy), to poori filesystem fresh
-// ban jati hai aur ye file bhi reset ho jayegi. Sirf normal restart (jaise process crash se
-// khud-ba-khud restart, bina naye deploy ke) mein file surakshit rehti hai. Agar Render pe
-// bhi deploys ke through persist karna ho, to paid "Render Disk" ya koi external storage
-// (jaise ek chhota database) chahiye hoga.
-const DAILY_TOKEN_BUDGET = 250000; // <-- yahan apna estimated daily token budget daalein
+// humara apna tracked estimate hai, jo Gemini ke har response ke "usageMetadata" se count karta hai.
+const DAILY_TOKEN_BUDGET = 250000;
 const USAGE_FILE = path.join(__dirname, "token-usage.json");
 
-// Ab ek array mein poori history rakhte hain — [{date, used}, {date, used}, ...]
-// Purane din ka data kabhi overwrite/delete nahi hota, sirf AAJ ke din wali entry
-// update hoti hai. Isse aap chahen to purane dinon ka usage bhi analyze kar sakte hain.
 let usageHistory = [];
 let usageTrackerDatePT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
 
-// ===== Startup pe purani saved history load karo =====
 try {
   if (fs.existsSync(USAGE_FILE)) {
     const saved = JSON.parse(fs.readFileSync(USAGE_FILE, "utf-8"));
-    // Purane format (single object) se bhi migrate kar lo, agar kisi purani file mein wahi ho
     usageHistory = Array.isArray(saved) ? saved : [saved];
     console.log(`✅ Token usage history load hui — ${usageHistory.length} din ka record mila.`);
   }
@@ -622,7 +577,6 @@ try {
   console.error("⚠️ Token usage file load nahi ho saki:", err.message);
 }
 
-// Aaj ke din ki entry dhoondo; na mile to nayi bana kar array mein add karo (purani entries chhu nahi
 function getTodayEntry() {
   let entry = usageHistory.find((e) => e.date === usageTrackerDatePT);
   if (!entry) {
@@ -632,7 +586,6 @@ function getTodayEntry() {
   return entry;
 }
 
-// ===== Har update ke baad poori history file mein save karo (async, taake request slow na ho) =====
 function saveUsageToFile() {
   fs.writeFile(USAGE_FILE, JSON.stringify(usageHistory, null, 2), (err) => {
     if (err) console.error("⚠️ Token usage file save nahi ho saki:", err.message);
@@ -642,26 +595,16 @@ function saveUsageToFile() {
 // ============================================================
 // FEEDBACK SYSTEM (5-star rating + bug/feature/general messages)
 // ============================================================
-// File mein save NAHI karte — Render ka disk ephemeral hai, deploy hone par data
-// kho sakta hai. Iski jagah har feedback turant email ke through bhej dete hain,
-// taake koi bhi Render ki storage involve na ho — email Gmail ke apne inbox mein
-// hamesha ke liye surakshit rehta hai.
-//
-// NOTE: Render free tier SMTP ports (25/465/587) block karta hai, isliye SMTP
-// (Nodemailer) ki jagah Brevo ki HTTP API use kar rahe hain — ye normal HTTPS
-// (port 443) se jati hai, jo kabhi block nahi hoti.
 const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
 const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
 const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
-const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER; // wahi Gmail account jisse refresh token banaya
+const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER;
 const FEEDBACK_EMAIL_TO = process.env.FEEDBACK_EMAIL_TO || FEEDBACK_EMAIL_USER;
 
 if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
   console.error("⚠️ Gmail API credentials .env mein nahi mili — feedback emails nahi bhej payenge.");
 }
 
-// Refresh token se ek naya (short-lived) access token lete hain — ye har email se pehle karna
-// hota hai, kyunke access tokens sirf ~1 ghante ke liye valid hote hain, refresh token permanent hai.
 async function getGmailAccessToken() {
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -682,16 +625,10 @@ function base64UrlEncode(str) {
   return Buffer.from(str).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// Email HEADERS (Subject waghera) sirf ASCII support karte hain — emoji/em-dash jese
-// non-ASCII characters ko RFC 2047 "encoded-word" format mein encode karna zaroori hai,
-// warna Gmail jese clients unhe galat interpret kar ke garbage dikhate hain.
 function encodeMimeHeader(str) {
   return `=?UTF-8?B?${Buffer.from(str, "utf-8").toString("base64")}?=`;
 }
 
-// Gmail ki apni official API — asal mein Gmail se seedha bhejta hai (koi third-party
-// relay nahi), isliye "freemail sender via relay" wala deliverability issue hi nahi aata.
-// HTTPS API hai, isliye Render ka SMTP-port-block bhi masla nahi karta.
 async function sendFeedbackEmail(entry) {
   if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
     throw new Error("Email not configured on server.");
@@ -737,7 +674,7 @@ ${entry.message || "(no message provided)"}`;
 function trackTokenUsage(usageMetadata) {
   const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   if (todayPT !== usageTrackerDatePT) {
-    usageTrackerDatePT = todayPT; // naya din — purani entries history mein rehti hain
+    usageTrackerDatePT = todayPT;
   }
   const entry = getTodayEntry();
   if (usageMetadata?.totalTokenCount) {
@@ -758,23 +695,118 @@ function getUsageSnapshot() {
 }
 
 // ============================================================
+// PAST PAPERS — Google Drive API, folder hi index hai (koi manual JSON nahi)
+// ============================================================
+const DRIVE_API_KEY = process.env.DRIVE_API_KEY;
+const DRIVE_ROOT_FOLDER_ID = process.env.DRIVE_ROOT_FOLDER_ID;
+
+if (!DRIVE_API_KEY || !DRIVE_ROOT_FOLDER_ID) {
+  console.error("⚠️ DRIVE_API_KEY / DRIVE_ROOT_FOLDER_ID .env mein nahi mili — Past Paper Analyzer kaam nahi karega.");
+}
+
+const PAPERS_CACHE_TTL_MS = 10 * 60 * 1000;
+let programFoldersCache = { data: null, fetchedAt: 0 };
+let paperListCache = {}; 
+
+async function driveApiRequest(query, fields = "files(id,name,mimeType)") {
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&key=${DRIVE_API_KEY}&fields=${encodeURIComponent(fields)}&pageSize=1000`;
+  const response = await fetch(url);
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || `Drive API error ${response.status}`);
+  }
+  return data.files || [];
+}
+
+// Root folder ke andar program-subfolders list karo (ye hi "Program" dropdown banayega)
+async function fetchProgramFolders() {
+  const now = Date.now();
+  if (programFoldersCache.data && now - programFoldersCache.fetchedAt < PAPERS_CACHE_TTL_MS) {
+    return programFoldersCache.data;
+  }
+
+  const query = `'${DRIVE_ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const folders = await driveApiRequest(query);
+
+  const programs = folders.map((f) => ({
+    name: f.name.replace(/_/g, " "),
+    folderId: f.id,
+  }));
+
+  programFoldersCache = { data: programs, fetchedAt: now };
+  return programs;
+}
+
+async function fetchPapersForProgram(programFolderId) {
+  const now = Date.now();
+  const cached = paperListCache[programFolderId];
+  if (cached && now - cached.fetchedAt < PAPERS_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const query = `'${programFolderId}' in parents and mimeType='application/pdf' and trashed=false`;
+  const files = await driveApiRequest(query);
+
+  const papers = files.map((f) => parsePaperFilename(f.name, f.id)).filter(Boolean);
+
+  paperListCache[programFolderId] = { data: papers, fetchedAt: now };
+  return papers;
+}
+
+// Expected: Sem{N}_{Year}_{Subject}_{ExamType}_{PaperNo}.pdf
+function parsePaperFilename(fileName, fileId) {
+  const match = fileName.match(/^Sem(\d+)_(\d{4})_([A-Za-z0-9]+)_(Mid|Final|Quiz)_(\d+)\.pdf$/i);
+  if (!match) {
+    console.warn(`[Past Papers] Naming format se match nahi hua, skip kiya: ${fileName}`);
+    return null;
+  }
+
+  const [, semester, year, subjectRaw, examType, paperNo] = match;
+  const subject = subjectRaw.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+
+  return {
+    fileId,
+    semester: parseInt(semester, 10),
+    year: parseInt(year, 10),
+    subject,
+    examType,
+    paperNo: parseInt(paperNo, 10),
+  };
+}
+
+// ===== PAST PAPERS — PROGRAMS LIST (dropdown ke liye) =====
+app.get("/api/papers/programs", async (req, res) => {
+  try {
+    const programs = await fetchProgramFolders();
+    res.json({ programs });
+  } catch (err) {
+    console.error("[Server Error - Papers Programs]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "Could not load programs.") });
+  }
+});
+
+// ===== PAST PAPERS — SPECIFIC PROGRAM KE PAPERS =====
+app.get("/api/papers/list", async (req, res) => {
+  try {
+    const { folderId } = req.query;
+    if (!folderId) return res.status(400).json({ error: "folderId is required." });
+
+    const papers = await fetchPapersForProgram(folderId);
+    papers.sort((a, b) => b.year - a.year || b.semester - a.semester || a.subject.localeCompare(b.subject));
+    res.json({ papers });
+  } catch (err) {
+    console.error("[Server Error - Papers List]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "Could not load papers.") });
+  }
+});
+
+// ============================================================
 // GEMINI LOCAL USAGE TRACKER (Groq fallback decide karne ke liye)
 // ============================================================
-// Gemini ki asal free limit bohot chhoti hai (~5 RPD, ~5 RPM — December 2025 mein
-// Google ne cut kar di). Hum khud in dono ko track karte hain taake:
-// 1. Jab pata ho ke Gemini already exhausted hai, seedha Groq try karein (ek wasted,
-//    guaranteed-fail Gemini call na karein)
-// 2. Agar Gemini phir bhi real 429 de de (kisi aur wajah se, jaise races), tab bhi
-//    neeche wala try/catch Groq pe fallback kar dega.
-//
-// NOTE: Google apni free-tier limits kabhi bhi badal sakta hai — agar aage chal kar
-// number change ho to yahan GEMINI_RPD_LIMIT / GEMINI_RPM_LIMIT update kar dein,
-// ya .env mein GEMINI_RPD_LIMIT / GEMINI_RPM_LIMIT set kar dein (code change ki
-// zaroorat nahi hogi).
 const GEMINI_RPD_LIMIT = parseInt(process.env.GEMINI_RPD_LIMIT, 10) || 5;
 const GEMINI_RPM_LIMIT = parseInt(process.env.GEMINI_RPM_LIMIT, 10) || 5;
 
-let geminiRequestTimestamps = []; // pichle 60 seconds ki attempts (RPM ke liye)
+let geminiRequestTimestamps = [];
 let geminiDailyCount = 0;
 let geminiDailyDatePT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
 
@@ -790,15 +822,11 @@ function canUseGeminiNow() {
   return geminiDailyCount < GEMINI_RPD_LIMIT && geminiRequestTimestamps.length < GEMINI_RPM_LIMIT;
 }
 
-// Ye har Gemini ATTEMPT (chahay success ho ya fail) ke turant pehle call karo —
-// kyunke Google ke RPM/RPD ke against fail hui request bhi shayad count hoti hai.
 function recordGeminiAttempt() {
   geminiRequestTimestamps.push(Date.now());
   geminiDailyCount++;
 }
 
-// Poore din mein sirf EK dafa "backup model pe switch ho gaya" wala notice dikhana hai —
-// baaki saari Groq-powered responses bilkul normal (bina kisi indication ke) dikhni chahiye.
 let fallbackNotifiedDatePT = null;
 
 function shouldNotifyFallback() {
@@ -807,10 +835,10 @@ function shouldNotifyFallback() {
     fallbackNotifiedDatePT = todayPT;
     return true; // aaj ka pehla switch — notify karo
   }
-  return false; // aaj already notify ho chuka hai
+  return false;
 }
 
-// ===== GROQ BACKUP CALL (sirf normal chat ke liye — PDF Chat isay use nahi karta) =====
+// ===== GROQ BACKUP CALL =====
 async function callGroqChat(messages, userName) {
   const userNameNote = userName
     ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
@@ -819,9 +847,7 @@ async function callGroqChat(messages, userName) {
   const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
 
   async function attemptGroqCall(historyLimit) {
-    // Groq ki TPM limit Gemini se kaafi chhoti hai — lambi conversations mein poori
-    // history bhejne se request TPM cap cross kar sakti hai. Backup model ka kaam
-    // sirf turant ka jawab dena hai, isliye sirf recent messages bhejte hain.
+    // Sirf instantly jawab dena hai, isliye sirf recent messages bhejte hain last conversation nhi.
     const trimmedMessages = messages.slice(-historyLimit);
 
     const groqMessages = [
@@ -843,10 +869,6 @@ async function callGroqChat(messages, userName) {
         messages: groqMessages,
         temperature: 0.7,
         max_tokens: 2048,
-        // NOTE: 'reasoning_format' yahan jaanbujh kar nahi bheja — ye sirf reasoning-capable
-        // models (jaise qwen3) support karte hain; normal instruct models (jaise llama-4-scout)
-        // is param pe error dete hain. Isliye hum sirf neeche wali <think> stripping (jo har
-        // model ke sath safely kaam karti hai) pe hi rely karte hain.
       }),
     });
 
@@ -860,10 +882,6 @@ async function callGroqChat(messages, userName) {
     }
 
     let content = data.choices?.[0]?.message?.content || "No response received.";
-
-    // Safety net: agar (reasoning-capable) model ne <think>...</think> content ke
-    // andar bhej diya ho, to usay yahan se hata dein. Non-reasoning models ke liye
-    // ye simply kuch nahi karega (koi <think> tag nahi milega to no-op rahega).
     content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     return content;
@@ -884,45 +902,36 @@ async function callGroqChat(messages, userName) {
 
 // ===== MIDDLEWARE =====
 app.use(cors());
-app.use(express.json({ limit: "5mb" })); // PDF extracted text bhejne ke liye default 100kb limit kaafi nahi thi
-app.use(express.static(path.join(__dirname))); // index.html, style.css, app.js serve karega
+app.use(express.json({ limit: "5mb" })); 
+app.use(express.static(path.join(__dirname)));
  
 // ===== PER-IP RATE LIMITING (taake ek user spam kare to sab ke liye quota khatam na ho) =====
-// Har IP address ko apni alag limit milti hai — yeh Gemini ki overall free quota se
-// chhoti rakhi gayi hai taake ek user, baqi sab students ke liye service down na kar sake.
- 
 // ===== RATE LIMIT KEY =====
 // Login system nahi hai, isliye frontend ek anonymous deviceId (localStorage mein) generate
-// karta hai aur har request ke saath bhejta hai. Hum isay IP ki jagah primary key banate hain,
-// taake university WiFi/NAT ke peeche jo bohot saare students ek hi public IP share karte hain,
-// unko ek dusre ki limit ka nuksan na ho — har device/browser ki apni alag, fair limit hogi.
 function getRateLimitKey(req) {
   const id = req.body?.deviceId;
   if (typeof id === "string" && id.length > 0 && id.length <= 100) {
     return `dev:${id}`;
   }
-  // deviceId na mile (purana cached page, JS disabled, waghera) to IP pe fallback karo
   return `ip:${req.ip}`;
 }
 
 // Short-term limit: 1 minute mein zyada se zyada 8 messages per device (spam/bot protection)
 const minuteLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000, 
   max: 8,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getRateLimitKey,
-  validate: false, // custom keyGenerator use kar rahe hain, built-in IP validation warnings skip karo
+  validate: false,
   message: {
-    error: "Bohat zyada messages bhej diye thoray waqt mein. Mehrbani ferma kar 1 minute ruk kar dobara try karein.",
+    error: "Too many messages were sent in a short time. Please wait a minute and try again.",
     rateLimited: true,
   },
 });
 
-// Daily limit: 1 din mein zyada se zyada 60 messages per device
-// (taake ek hi user, university ke sab students ke liye daily Gemini quota na khatam kar de)
 const dailyLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  windowMs: 24 * 60 * 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
@@ -934,7 +943,6 @@ const dailyLimiter = rateLimit({
   },
 });
  
-// Feedback limit: spam se bachne ke liye, 1 din mein zyada se zyada 5 feedback per device
 const feedbackLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 5,
@@ -949,7 +957,6 @@ const feedbackLimiter = rateLimit({
 });
 
 // ===== CHAT ENDPOINT =====
-// Frontend yahan POST request bhejega: { messages: [...] }
 app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
   try {
     const { messages, userName } = req.body;
@@ -972,14 +979,11 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
         }));
         const lastMsg = messages[messages.length - 1];
 
-        // User ka naam context mein add karo taake AI naturally use kare
         const userNameNote = userName
           ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
           : "";
-        // Fee-related sawal ho tabhi FEE_CONTEXT jodo — taake normal messages mein
-        // ye bara fee data na jaye aur token usage kam rahe.
         const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
-         const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
+        const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
         const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY_1}`;
@@ -1016,14 +1020,14 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
         }
 
         reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
-        trackTokenUsage(data.usageMetadata); // token usage tracker (permanent)
+        trackTokenUsage(data.usageMetadata);
         usage = getUsageSnapshot();
       } catch (err) {
         if (err.quotaExceeded) {
           console.warn("[Fallback] Gemini ki limit khatam — Groq (backup) pe switch ho raha hai.");
           provider = "groq";
         } else {
-          throw err; // koi aur (unexpected) error — normal error handling mein jaye
+          throw err;
         }
       }
     } else {
@@ -1033,7 +1037,6 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
 
     if (provider === "groq") {
       if (!GROQ_API_KEY) {
-        // Backup configure hi nahi hai — asal Gemini quota error dikhao (jaisa pehle hota tha)
         const resetInfo = getQuotaResetTime();
         return res.status(429).json({
           error: "Gemini ki free limit khatam ho gayi hai, aur backup (Groq) configure nahi hai.",
@@ -1043,9 +1046,6 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
         });
       }
 
-      // Poore din mein sirf pehli baar switch hone par sirf ek notice bhejo —
-      // is turn ka actual jawab skip karo (Groq call bhi waste nahi hoti). User
-      // ko dobara message bhejna hoga, tab se saari responses bilkul normal hongi.
       if (shouldNotifyFallback()) {
         return res.json({
           reply: `⚡ **Switching to Backup Model**
@@ -1071,8 +1071,6 @@ The system is automatically switching to a backup model so you can keep chatting
 });
  
 // ===== PDF CHAT ENDPOINT =====
-// Frontend yahan POST request bhejega: { messages: [...], pdfText: "..." }
-// pdfText client-side (pdf.js) se extract hoke aata hai — server pe koi file store nahi hoti.
 app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
   try {
     const { messages, pdfText, userName } = req.body;
@@ -1090,7 +1088,6 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
     }));
     const lastMsg = messages[messages.length - 1];
 
-    // Server-side safety cap bhi lagao (client-side cap ke ilawa — defense in depth)
     const MAX_PDF_CHARS = 60000;
     const safePdfText = pdfText.length > MAX_PDF_CHARS ? pdfText.slice(0, MAX_PDF_CHARS) : pdfText;
 
@@ -1133,7 +1130,7 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
     }
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
-    trackTokenUsage(data.usageMetadata); // token usage tracker (permanent)
+    trackTokenUsage(data.usageMetadata);
     res.json({ reply, usage: getUsageSnapshot() });
   } catch (err) {
     console.error("[Server Error - PDF Chat]", err);
@@ -1142,7 +1139,6 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
 });
 
 // ===== FEEDBACK ENDPOINT =====
-// Frontend yahan POST karega: { rating: 1-5, category: "general"|"bug"|"feature", message, deviceId }
 app.post("/api/feedback", feedbackLimiter, async (req, res) => {
   try {
     const { rating, category, message, deviceId, name } = req.body;
@@ -1240,7 +1236,6 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", model: GEMINI_MODEL });
 });
 
-// Token usage bar ke liye — page load pe initial value dikhane ke liye.
 app.get("/api/usage", (req, res) => {
   res.json(getUsageSnapshot());
 });

@@ -1,7 +1,6 @@
-// ===== DEVICE ID =====
-// Login system nahi hai, isliye har browser/device ko ek anonymous ID di jati hai
-// (localStorage mein persist hoti hai) taake backend har device ki apni alag, fair
-// rate limit rakh sake — chahay bohot saare students ek hi university WiFi/IP se hon.
+// ============================================================
+// DEVICE ID - CONFIGURATION
+// ============================================================
 const DEVICE_ID_KEY = "ul_ai_device_id";
 
 function getDeviceId() {
@@ -15,9 +14,6 @@ function getDeviceId() {
   return id;
 }
 
-// ===== CONFIGURATION =====
-// NOTE: API key aur university context ab backend (server.js) mein hain — secure!
-// Frontend sirf /api/chat endpoint ko call karta hai.
 const CONFIG = {
   maxTokens: 1024,
 };
@@ -62,7 +58,6 @@ const aboutModal     = document.getElementById("aboutModal");
 const closeSettings  = document.getElementById("closeSettings");
 const closeAbout     = document.getElementById("closeAbout");
 const openAboutBtn   = document.getElementById("openAboutBtn");
-// NOTE: PDF Chat ke DOM refs, state, aur functions ab pdf-chat.js mein hain (alag file)
 
 // ===== INIT =====
 document.addEventListener("DOMContentLoaded", () => {
@@ -70,40 +65,30 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   autoResize(document.getElementById("messageInput"));
   updateEnvironmentBadge();
-  loadInitialTokenUsage(); // token usage bar
+  loadInitialTokenUsage(); 
 
-  // Mobile pe sidebar default collapsed (64px strip), Desktop pe expanded
   if (window.innerWidth <= 768) {
     sidebar.classList.add("collapsed");
   }
-  // Desktop pe koi collapsed class nahi — already expanded by default
-
-  // BUG FIX: Tab switch pe naya chat mat banao — pehla existing session restore karo
   if (chatSessions.length > 0) {
     currentSessionId = chatSessions[0].id;
     switchSession(currentSessionId);
   } else {
-    // Pehli baar open — sirf welcome show karo, empty chat mat banao
     showWelcome(true);
   }
 
-  // Agar naam nahi pata to naam pucho
   if (!userName) {
     setTimeout(() => showNameDialog(), 600);
   } else {
     updateWelcomeGreeting();
   }
 
-  // User badge init
   updateUserBadge();
   document.getElementById("userBadge").addEventListener("click", () => {
     showNameDialog();
   });
 });
  
-// Production mein "Dev Info" jaisi internal debug details chat mein show nahi karni —
-// ye check /api/status se milta hai (server pehle hi is hisaab se sab kuch sanitize
-// karta hai, lekin frontend mein bhi extra clean UI ke liye ye flag use karte hain).
 let isProductionEnv = false;
 
 async function updateEnvironmentBadge() {
@@ -120,7 +105,7 @@ async function updateEnvironmentBadge() {
 }
 function setupEventListeners() {
   sidebarToggle.addEventListener("click", toggleSidebar);
-  sidebarBackdrop.addEventListener("click", toggleSidebar); // backdrop tap karne se sidebar band ho jaye
+  sidebarBackdrop.addEventListener("click", toggleSidebar);
   newChatBtn.addEventListener("click", startNewChat);
   themeToggle.addEventListener("click", toggleTheme);
   sendBtn.addEventListener("click", () => {
@@ -132,7 +117,6 @@ function setupEventListeners() {
   });
   settingsBtn.addEventListener("click", () => settingsModal.classList.add("open"));
 
-  // ===== FEEDBACK MODAL =====
   feedbackFab.addEventListener("click", () => {
     resetFeedbackForm();
     feedbackModal.classList.add("open");
@@ -140,7 +124,6 @@ function setupEventListeners() {
   closeFeedback.addEventListener("click", () => feedbackModal.classList.remove("open"));
   feedbackModal.addEventListener("click", (e) => { if (e.target === feedbackModal) feedbackModal.classList.remove("open"); });
 
-  // Star rating clicks
   feedbackStars.querySelectorAll(".star-btn").forEach((star) => {
     star.addEventListener("click", () => {
       feedbackRating = parseInt(star.dataset.value, 10);
@@ -148,7 +131,6 @@ function setupEventListeners() {
     });
   });
 
-  // Category pill clicks
   feedbackCategoryRow.querySelectorAll(".feedback-cat-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       feedbackCategory = btn.dataset.cat;
@@ -159,7 +141,6 @@ function setupEventListeners() {
 
   feedbackSendBtn.addEventListener("click", submitFeedback);
   closeSettings.addEventListener("click", () => settingsModal.classList.remove("open"));
-  closeAbout.addEventListener("click", () => aboutModal.classList.remove("open"));
   
   if (openAboutBtn) {
     openAboutBtn.addEventListener("click", () => {
@@ -168,11 +149,8 @@ function setupEventListeners() {
     });
   }
  
-  // Close modals on backdrop click
   settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.classList.remove("open"); });
-  aboutModal.addEventListener("click", (e) => { if (e.target === aboutModal) aboutModal.classList.remove("open"); });
  
-  // Close context menu on outside click
   document.addEventListener("click", () => closeContextMenu());
  
   messageInput.addEventListener("input", () => {
@@ -186,8 +164,8 @@ function setupEventListeners() {
     }
   });
 
-  // ===== FEATURE NAV BUTTONS (Past Paper Analyzer / Smart Notes+Quiz / GPA Calculator — coming soon) =====
-  document.querySelectorAll(".feature-btn:not(#pdfChatBtn):not(#meritListBtn)").forEach((btn) => {
+  // ===== FEATURE NAV BUTTONS (Smart Notes+Quiz / GPA Calculator — coming soon) =====
+  document.querySelectorAll(".feature-btn:not(#pdfChatBtn):not(#meritListBtn):not(#pastPaperBtn)").forEach((btn) => {
     btn.addEventListener("click", () => {
       showToast(`🚧 ${btn.dataset.feature} is currently under development. It will be available soon!`);
     });
@@ -195,6 +173,7 @@ function setupEventListeners() {
 
   // ===== PDF CHAT (poora setup pdf-chat.js mein hai) =====
   setupPdfChatListeners();
+  setupPastPaperListeners();
 }
 let toastTimeout = null;
 function showToast(message) {
@@ -215,7 +194,6 @@ function showToast(message) {
   }, 2800);
 }
 
-// ===== FEEDBACK LOGIC =====
 function updateStarDisplay() {
   feedbackStars.querySelectorAll(".star-btn").forEach((star) => {
     const val = parseInt(star.dataset.value, 10);
@@ -276,7 +254,6 @@ async function submitFeedback() {
 function toggleSidebar() {
   sidebar.classList.toggle("collapsed");
 
-  // Mobile pe: jab expanded (not collapsed) to backdrop show karo
   if (window.innerWidth <= 768) {
     const isExpanded = !sidebar.classList.contains("collapsed");
     if (isExpanded) {
@@ -290,79 +267,17 @@ function toggleSidebar() {
 }
 
 function closeSidebarMobile() {
-  // Sirf mobile width pe sidebar ko force-close karta hai (chat select karne ke baad)
   if (window.innerWidth <= 768) {
     sidebar.classList.add("collapsed");
     sidebarBackdrop.classList.remove("active");
   }
 }
 
-// ===== RESIZE SAFETY =====
-// Agar window resize ho (ya DevTools mein device switch ho), backdrop ki
-// "active" state ko hamesha current width ke mutabiq sahi rakho.
-// Desktop width pe backdrop kabhi active nahi rehna chahiye.
 window.addEventListener("resize", () => {
   if (window.innerWidth > 768) {
     sidebarBackdrop.classList.remove("active");
   }
 });
-  
-// ===== VOICE INPUT (Web Speech API — Chrome/Edge/Safari mein kaam karta hai; =====
-// Firefox support nahi karta, is case mein button khud-ba-khud chhup jayega)
-const micBtn = document.getElementById("micBtn");
-const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-if (!SpeechRecognitionAPI) {
-  micBtn.classList.add("hidden"); // browser support nahi karta — button hide
-} else {
-  const recognition = new SpeechRecognitionAPI();
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.lang = "en-US";
-
-  let isListening = false;
-
-  recognition.onstart = () => {
-    isListening = true;
-    micBtn.classList.add("listening");
-  };
-
-  recognition.onend = () => {
-    isListening = false;
-    micBtn.classList.remove("listening");
-  };
-
-  recognition.onerror = (event) => {
-    console.error("[Voice Input Error]", event.error);
-    isListening = false;
-    micBtn.classList.remove("listening");
-    if (event.error === "not-allowed") {
-      showToast("🎤 Microphone permission denied.");
-    } else if (event.error === "no-speech") {
-      showToast("🎤 Didn't catch that — try speaking right after tapping the mic.");
-    } else if (event.error !== "aborted") {
-      showToast("⚠️ Voice input failed. Please try again.");
-    }
-  };
-
-  recognition.onresult = (event) => {
-    let transcript = "";
-    for (let i = 0; i < event.results.length; i++) {
-      transcript += event.results[i][0].transcript;
-    }
-    messageInput.value = transcript;
-    autoResize(messageInput);
-  };
-
-  micBtn.addEventListener("click", () => {
-    if (isListening) {
-      recognition.stop();
-    } else {
-      messageInput.focus();
-      recognition.start();
-    }
-  });
-}
 
 // ===== THEME =====
 function toggleTheme() {
@@ -375,7 +290,6 @@ function toggleTheme() {
  
 // ===== USER NAME =====
 function showNameDialog() {
-  // Agar dialog already exist kare to skip
   if (document.getElementById("nameDialog")) return;
 
   const overlay = document.createElement("div");
@@ -434,7 +348,6 @@ function updateWelcomeGreeting() {
   const subEl = document.querySelector(".welcome-sub");
   if (!subEl) return;
 
-  // welcome-sub as-is rehne do — neeche alag greeting element banao
   let greetEl = document.getElementById("welcomeGreeting");
   if (!greetEl) {
     greetEl = document.createElement("p");
@@ -471,7 +384,6 @@ function updateWelcomeGreeting() {
       i++;
       setTimeout(typeChar, speed);
     } else {
-      // Typing done — cursor hatao
       greetEl.innerHTML = g.before + `<strong>${g.name}</strong>` + g.after;
     }
   }
@@ -509,8 +421,8 @@ function startNewChat() {
   exitPdfChatMode();
 
   if (typeof exitMeritListMode === "function") exitMeritListMode();
+  if (typeof exitPastPaperMode === "function") exitPastPaperMode();
   
-  // Agar current session already empty hai to naya mat banao
   const existing = getSession();
   if (existing && existing.messages.length === 0) {
     clearMessages();
@@ -535,6 +447,7 @@ function startNewChat() {
 function switchSession(id) {
   exitPdfChatMode();
   if (typeof exitMeritListMode === "function") exitMeritListMode();
+  if (typeof exitPastPaperMode === "function") exitPastPaperMode();
 
   currentSessionId = id;
   const session = getSession();
@@ -546,7 +459,7 @@ function switchSession(id) {
     showWelcome(true);
   }
   renderHistory();
-  closeSidebarMobile(); // mobile pe chat select karne ke baad sidebar khud band ho jaye
+  closeSidebarMobile();
 }
  
 function getSession() {
@@ -659,8 +572,6 @@ function showWelcome(show) {
 }
  
 function renderMessage(role, content) {
-  // Role normalize karo: "assistant" (Gemini/session storage convention)
-  // aur "ai" (humara internal naam) dono ko same treat karo.
   const normalizedRole = (role === "assistant") ? "ai" : role;
 
   const div = document.createElement("div");
@@ -677,7 +588,6 @@ function renderMessage(role, content) {
   div.appendChild(avatar);
   div.appendChild(bubble);
 
-  // Sirf AI messages ke liye copy button
   if (normalizedRole === "ai") {
     div.appendChild(createCopyButton(content));
   }
@@ -733,16 +643,16 @@ function typewriterMessage(text) {
  
   return new Promise(resolve => {
     currentTypewriterResolve = resolve;
-    // Split into words (keep spaces)
     const words = text.split(/(\s+)/);
     let i = 0;
-    const speed = 18; // ms per word — lower = faster
+    const speed = 18;
  
     function typeWord() {
       if (stopRequested) {
-        // Stop pe jo text abhi tak type hua hai wahi dikhao
         bubble.innerHTML = formatText(words.slice(0, i).join(""));
-        div.appendChild(createCopyButton(words.slice(0, i).join("")));
+        const actionsWrap1 = createCopyButton(words.slice(0, i).join(""));
+        div.appendChild(actionsWrap1);
+        actionsWrap1.appendChild(createSpeakerButton(words.slice(0, i).join("")));
         currentTypewriterResolve = null;
         resolve();
         return;
@@ -755,7 +665,9 @@ function typewriterMessage(text) {
         setTimeout(typeWord, speed);
       } else {
         bubble.innerHTML = formatText(text);
-        div.appendChild(createCopyButton(text));
+        const actionsWrap2 = createCopyButton(text);
+        div.appendChild(actionsWrap2);
+        actionsWrap2.appendChild(createSpeakerButton(text));
         currentTypewriterResolve = null;
         resolve();
       }
@@ -803,7 +715,6 @@ function formatText(text) {
     let line = lines[i];
 
     // ===== TABLE DETECTION =====
-    // Pattern: | col | col | ... followed by |---|---| separator row
     const isTableRow = /^\|.+\|$/.test(line.trim());
     const nextLine = lines[i + 1] || "";
     const isSeparatorNext = /^\|?[\s\-:|]+\|?$/.test(nextLine.trim()) && nextLine.includes("-");
@@ -817,8 +728,7 @@ function formatText(text) {
       headerCells.forEach(cell => { html += `<th>${inline(cell)}</th>`; });
       html += `</tr></thead><tbody>`;
 
-      i += 2; // skip header + separator row
-
+      i += 2; 
       // Body rows
       while (i < lines.length && /^\|.+\|$/.test(lines[i].trim())) {
         const rowCells = lines[i].trim().slice(1, -1).split("|").map(c => c.trim());
@@ -829,7 +739,7 @@ function formatText(text) {
       }
 
       html += `</tbody></table></div>`;
-      continue; // already advanced i, skip the i++ at loop end
+      continue;
     }
 
     // Headings: ### ## #
@@ -875,8 +785,7 @@ function formatText(text) {
   if (inList) html += "</ul>";
   return html;
 }
- 
-// Inline formatting: bold, italic, code, links
+
 function inline(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
@@ -885,7 +794,6 @@ function inline(text) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
 }
  
-// ===== STOP GENERATION =====
 function handleStop() {
   stopRequested = true;
   if (currentTypewriterResolve) {
@@ -898,7 +806,6 @@ function handleStop() {
   messageInput.focus();
 }
 
-// ===== BUTTON MODE SWITCH =====
 function setStopMode() {
   sendBtn.disabled = false;
   sendBtn.title = "Stop";
@@ -913,13 +820,10 @@ function setSendMode() {
   sendBtn.disabled = false;
 }
 
-// ===== SEND MESSAGE =====
-// ===== SEND MESSAGE =====
 async function handleSend() {
   const text = messageInput.value.trim();
   if (!text || isLoading) return;
 
-  // ===== PDF CHAT GUARDS =====
   if (pdfChatMode) {
     if (isExtractingPdf) {
       showToast("⏳ Your PDF is being processed. Please wait...");
@@ -931,7 +835,6 @@ async function handleSend() {
     }
   }
 
-  // Agar koi session nahi hai to naya banao
   if (!currentSessionId || !getSession()) {
     const id = Date.now().toString();
     const newSession = { id, title: "New Chat", messages: [] };
@@ -943,7 +846,6 @@ async function handleSend() {
 
   showWelcome(false);
 
-  // PDF mode mein alag messages array, normal session mein normal array
   if (pdfChatMode) {
     pdfChatMessages.push({ role: "user", content: text });
     renderMessage("user", text);
@@ -976,9 +878,6 @@ async function handleSend() {
     } else {
       const result = await callGeminiAPI(getSession().messages);
       reply = result.reply;
-      // NOTE: Jab Gemini ki limit khatam ho aur system pehli baar Groq pe switch
-      // hota hai, backend is turn ka jawab nahi deta — sirf ek notice bhejta hai
-      // (reply ke tor par hi). Agla message bhejne par normal jawab milega.
     }
     removeTyping();
 
@@ -992,16 +891,12 @@ async function handleSend() {
   } catch (err) {
     removeTyping();
  
-    // ===== DEBUG: Console pe full error dekho (development ke liye) =====
     console.error("[UL AI Error]", err);
  
-    // ===== ERROR TYPE DETECT KARO =====
     const msg = err.message || "";
     let userMsg = "";
  
     if (msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("not valid") || msg.toLowerCase().includes("invalid")) {
-      // Development/Beta mein: extra dev info dikhao (debugging ke liye)
-      // Production mein: sirf professional message, koi internal detail nahi
       userMsg = `⚠️ **Internal Issue**
  
 Sorry, something went wrong on our end just now.
@@ -1013,7 +908,6 @@ Let me notify **Boss Naeem** about this issue. He will investigate it as soon as
 🔧 *Dev Info: ${msg}*`}`;
  
     } else if (err.rateLimited) {
-      // ===== PER-IP RATE LIMIT — yeh tumhari apni limit hai, Gemini ki nahi =====
       userMsg = `🐢 **Slow Down a Little**
 
 You've sent quite a few messages in a short time.
@@ -1021,7 +915,6 @@ This limit exists so that **all students** can use UL AI fairly — one user sho
 ⏱️ Please wait a few minutes and try again.`;
 
     } else if (err.quotaExceeded) {
-      // ===== QUOTA EXCEEDED — reset time ke saath professional message =====
       const resetTime = err.resetTimePKT || "midnight";
       const hours = err.hoursRemaining;
       const hoursText = hours ? ` (in about **${hours} hours**)` : "";
@@ -1074,8 +967,7 @@ Let me notify **Boss Naeem** about this issue. He will investigate it as soon as
   setSendMode();
   messageInput.focus();
 }
- 
-// TOKEN USAGE BAR (backend /api/usage aur response.usage se update hoti hai)
+
 function updateTokenUsageBar(usage) {
   const pctEl = document.getElementById("tokenUsagePct");
   if (!pctEl || !usage) return;
@@ -1090,11 +982,10 @@ async function loadInitialTokenUsage() {
     const data = await res.json();
     updateTokenUsageBar(data);
   } catch (_) {
-    // Chup chaap ignore karo — ye sirf ek temporary debug bar hai
+    // Chup chaap ignore 
   }
 }
 
-// ===== SAFE JSON PARSE (agar server se HTML/error page aa jaye to clear message de) =====
 async function parseJsonSafely(response) {
   const raw = await response.text();
   try {
@@ -1111,7 +1002,6 @@ async function parseJsonSafely(response) {
   }
 }
 
-// ===== BACKEND API CALL (Secure — API key backend mein chupi hai) =====
 async function callGeminiAPI(messages) {
   const response = await fetch("/api/chat", {
     method: "POST",
@@ -1123,20 +1013,18 @@ async function callGeminiAPI(messages) {
 
   if (!response.ok) {
     const error = new Error(data.error || `Server Error ${response.status}`);
-    // Quota info (agar backend ne bheja ho) error object ke saath attach karo
+
     if (data.quotaExceeded) {
       error.quotaExceeded = true;
       error.resetTimePKT = data.resetTimePKT;
       error.hoursRemaining = data.hoursRemaining;
     }
-    // Per-IP rate limit info (alag se — yeh Gemini quota nahi, yeh apni personal limit hai)
     if (data.rateLimited) {
       error.rateLimited = true;
     }
     throw error;
   }
 
-  // Token usage bar update karo (backend response mein 'usage' aata hai)
   if (data.usage) updateTokenUsageBar(data.usage);
 
   return {
@@ -1146,30 +1034,23 @@ async function callGeminiAPI(messages) {
   };
 }
 
-// NOTE: callPdfChatAPI() ab pdf-chat.js mein hai
-
-// ===== SUGGESTION CARDS =====
 function sendSuggestion(text) {
   messageInput.value = text;
   handleSend();
 }
  
-// ===== AUTO RESIZE TEXTAREA =====
 function autoResize(el) {
-  const maxHeight = 220; // CSS ke max-height se match hona chahiye
+  const maxHeight = 220; 
 
-  // Pehle overflow hidden karo, phir height "auto" karke measure karo — is order se
-  // hi scrollHeight sahi milta hai (warna kabhi kabhi purani/scrollbar-affected value
-  // aa jati hai, jiski wajah se text empty karne par bhi box bara hi reh jata tha).
   el.style.overflowY = "hidden";
   el.style.height = "auto";
   const newHeight = el.scrollHeight;
 
   if (newHeight > maxHeight) {
     el.style.height = maxHeight + "px";
-    el.style.overflowY = "auto"; // limit cross hote hi scroll dikhao
+    el.style.overflowY = "auto"; 
   } else {
     el.style.height = newHeight + "px";
-    el.style.overflowY = "hidden"; // limit se neeche scrollbar mat dikhao
+    el.style.overflowY = "hidden";
   }
 }

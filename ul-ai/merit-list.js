@@ -29,20 +29,15 @@ if (meritListBtn) {
 // ===== ENTER / EXIT MERIT LIST MODE =====
 function enterMeritListMode() {
   // Kisi aur mode (jaise PDF Chat) se aa rahe hain to uska poora cleanup kar do
-  // (sirf active class nahi — attached PDF, restart button, attach-button state waghera bhi)
   if (typeof exitPdfChatMode === "function") exitPdfChatMode();
 
   meritListMode = true;
-
-  // Chat area clear, welcome hide, merit screen show
   clearMessages();
   showWelcome(false);
 
-  // Saari welcome screens hide karo
   document.querySelectorAll(".welcome-screen").forEach(el => el.classList.add("hidden"));
   meritListScreen.classList.remove("hidden");
 
-  // Sidebar highlights
   document.querySelectorAll(".feature-btn").forEach(btn => btn.classList.remove("active"));
   if (meritListBtn) meritListBtn.classList.add("active");
   document.querySelectorAll(".history-item-wrap.active").forEach(el => el.classList.remove("active"));
@@ -50,7 +45,6 @@ function enterMeritListMode() {
   closeSidebarMobile();
   document.body.classList.add("merit-mode");
 
-  // Programs load karo (pehli baar)
   if (!meritProgramsLoaded) loadMeritPrograms();
 }
 
@@ -104,7 +98,6 @@ async function searchMeritList() {
   const program = meritProgramSelect.value.trim();
   const query   = meritQueryInput.value.trim();
 
-  // Validation
   if (!program) {
     showMeritError("Please select your program first.");
     meritProgramSelect.focus();
@@ -116,7 +109,6 @@ async function searchMeritList() {
     return;
   }
 
-  // Loading state
   meritFindBtn.disabled = true;
   meritFindBtn.textContent = "Searching…";
   meritResultArea.innerHTML = `
@@ -156,7 +148,6 @@ async function searchMeritList() {
 }
 
 // ===== RESULT RENDERERS =====
-
 function showMeritError(msg) {
   meritResultArea.innerHTML = `
     <div class="merit-result-card error">

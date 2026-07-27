@@ -3,7 +3,6 @@
 // multiple free-tier keys ko ek "pool" ki tarah treat karta hai:
 //   - Har key ka apna RPD (requests/day) aur RPM (requests/minute) count track hota hai
 //   - Jab ek key exhaust ho jaye, agli available key khud-ba-khud mil jati hai
-//   - Pacific-Time midnight pe (jahan Google/Groq free-tier quotas reset hote hain)
 //     saari keys apne aap wapas available ho jati hain — koi manual restart nahi chahiye
 
 class KeyPool {
@@ -45,7 +44,6 @@ class KeyPool {
   }
 
   // Sabse pehli available key laut ati hai (jo RPD/RPM limit ke andar ho aur
-  // exhausted mark na ho), ya null agar poola pool khatam ho chuka ho.
   getAvailableKey() {
     this._resetIfNewDay();
     const now = Date.now();
@@ -61,8 +59,6 @@ class KeyPool {
     return null;
   }
 
-  // Diye gaye key ke ilawa koi bhi agli available key (retry ke liye — same
-  // exhausted key dobara na mile isliye).
   getNextAvailableKey(excludeLabel) {
     this._resetIfNewDay();
     const now = Date.now();
@@ -87,7 +83,7 @@ class KeyPool {
   // Quota-error (429 / rate limit) milne par is key ko aaj ke liye "band" mark karo
   markExhausted(keyEntry) {
     keyEntry.exhaustedToday = true;
-    console.warn(`⚠️ ${this.name}: key "${keyEntry.label}" ki limit khatam — agli key try hogi.`);
+    console.warn(`⚠️ ${this.name}: The limit of "${keyEntry.label}" is over. Next key will be used.`);
   }
 
   hasAnyKey() {

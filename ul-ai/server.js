@@ -24,24 +24,53 @@ function sanitizeError(rawMessage) {
   }
   return rawMessage;
 }
-const GEMINI_API_KEY_1 = process.env.GEMINI_API_KEY_1;
+const KeyPool = require("./keyPool");
+
 const PDF_API_KEY = process.env.PDF_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
-if (!GEMINI_API_KEY_1) {
-  console.error("❌ GEMINI_API_KEY_1 .env file mein nahi mili! .env.example dekho.");
-}
 if (!PDF_API_KEY) {
   console.error("❌ PDF_API_KEY .env file mein nahi mili — PDF Chat kaam nahi karega.");
 }
 
 // ===== GROQ (BACKUP MODEL) =====
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-if (!GROQ_API_KEY) {
-  console.error("⚠️ GROQ_API_KEY .env file mein nahi mili — Gemini ki limit khatam hone par backup kaam nahi karega.");
+// ===== MULTI-KEY POOLS (Gemini + Groq) =====
+// .env mein GEMINI_API_KEY_1, _2, _3 ... aur GROQ_API_KEY_1, _2, _3 ... rakho.
+// Jitni bhi milen (1 ya 5), sab automatically pool mein shamil ho jati hain.
+const GEMINI_RPD_LIMIT = parseInt(process.env.GEMINI_RPD_LIMIT, 10) || 5;
+const GEMINI_RPM_LIMIT = parseInt(process.env.GEMINI_RPM_LIMIT, 10) || 5;
+const GROQ_RPD_LIMIT = parseInt(process.env.GROQ_RPD_LIMIT, 10) || 1000;
+const GROQ_RPM_LIMIT = parseInt(process.env.GROQ_RPM_LIMIT, 10) || 30;
+
+function collectKeys(prefix) {
+  const keys = [];
+  let i = 1;
+  while (process.env[`${prefix}_${i}`]) {
+    keys.push(process.env[`${prefix}_${i}`]);
+    i++;
+  }
+  // Backward-compat: agar sirf purana single-key naam (bina _1) mila ho to bhi le lo
+  if (keys.length === 0 && process.env[prefix]) {
+    keys.push(process.env[prefix]);
+  }
+  return keys;
 }
+
+const geminiPool = new KeyPool({
+  name: "GEMINI",
+  keys: collectKeys("GEMINI_API_KEY"),
+  rpdLimit: GEMINI_RPD_LIMIT,
+  rpmLimit: GEMINI_RPM_LIMIT,
+});
+
+const groqPool = new KeyPool({
+  name: "GROQ",
+  keys: collectKeys("GROQ_API_KEY"),
+  rpdLimit: GROQ_RPD_LIMIT,
+  rpmLimit: GROQ_RPM_LIMIT,
+});
 
 const UNIVERSITY_CONTEXT = `
 You are UL AI — the official AI assistant for the University of Layyah (ul.edu.pk), located in Layyah, Punjab, Pakistan.
@@ -801,31 +830,9 @@ app.get("/api/papers/list", async (req, res) => {
 });
 
 // ============================================================
-// GEMINI LOCAL USAGE TRACKER (Groq fallback decide karne ke liye)
+// GEMINI / GROQ ki RPD/RPM tracking ab dono keyPool.js (geminiPool, groqPool)
+// ke andar per-key handle hoti hai — is se upar dekhein.
 // ============================================================
-const GEMINI_RPD_LIMIT = parseInt(process.env.GEMINI_RPD_LIMIT, 10) || 5;
-const GEMINI_RPM_LIMIT = parseInt(process.env.GEMINI_RPM_LIMIT, 10) || 5;
-
-let geminiRequestTimestamps = [];
-let geminiDailyCount = 0;
-let geminiDailyDatePT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
-
-function canUseGeminiNow() {
-  const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
-  if (todayPT !== geminiDailyDatePT) {
-    geminiDailyCount = 0;
-    geminiDailyDatePT = todayPT;
-  }
-  const now = Date.now();
-  geminiRequestTimestamps = geminiRequestTimestamps.filter((t) => now - t < 60 * 1000);
-
-  return geminiDailyCount < GEMINI_RPD_LIMIT && geminiRequestTimestamps.length < GEMINI_RPM_LIMIT;
-}
-
-function recordGeminiAttempt() {
-  geminiRequestTimestamps.push(Date.now());
-  geminiDailyCount++;
-}
 
 let fallbackNotifiedDatePT = null;
 
@@ -838,8 +845,9 @@ function shouldNotifyFallback() {
   return false;
 }
 
-// ===== GROQ BACKUP CALL =====
-async function callGroqChat(messages, userName) {
+// ===== GROQ BACKUP CALL (multi-key pool ke sath) =====
+// groqKeyEntry = geminiPool jaisa ek { key, label, ... } object jo groqPool se milta hai.
+async function callGroqChat(messages, userName, groqKeyEntry) {
   const userNameNote = userName
     ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
     : "";
@@ -862,7 +870,7 @@ async function callGroqChat(messages, userName) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+        Authorization: `Bearer ${groqKeyEntry.key}`,
       },
       body: JSON.stringify({
         model: GROQ_MODEL,
@@ -875,9 +883,12 @@ async function callGroqChat(messages, userName) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("[Groq Error]", data);
+      console.error(`[Groq Error - ${groqKeyEntry.label}]`, data);
       const err = new Error(data.error?.message || `Groq API Error ${response.status}`);
       err.isTpmError = data.error?.code === "rate_limit_exceeded" && data.error?.type === "tokens";
+      err.isQuotaError =
+        response.status === 429 &&
+        !err.isTpmError; // TPM ek alag category hai — agli key try karne ki bajaye trimmed retry behtar hai
       throw err;
     }
 
@@ -888,13 +899,17 @@ async function callGroqChat(messages, userName) {
   }
 
   try {
-    return await attemptGroqCall(8); // normal case — last 8 messages
+    const reply = await attemptGroqCall(8); // normal case — last 8 messages
+    groqPool.recordAttempt(groqKeyEntry);
+    return reply;
   } catch (err) {
     if (err.isTpmError) {
       // Bohot lambi conversation/message ki wajah se abhi bhi TPM cross ho gaya —
       // sirf latest question ke sath ek aakhri koshish karo (system prompt + last message)
-      console.warn("[Groq] TPM limit phir bhi cross hui — sirf latest message ke sath retry.");
-      return await attemptGroqCall(1);
+      console.warn(`[Groq] TPM limit phir bhi cross hui (${groqKeyEntry.label}) — sirf latest message ke sath retry.`);
+      const reply = await attemptGroqCall(1);
+      groqPool.recordAttempt(groqKeyEntry);
+      return reply;
     }
     throw err;
   }
@@ -968,75 +983,88 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
     let reply;
     let usage = null;
     let provider = "gemini";
+    let usedKeyLabel = null;
 
-    if (canUseGeminiNow()) {
+    const history = messages.slice(0, -1).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+    const lastMsg = messages[messages.length - 1];
+
+    const userNameNote = userName
+      ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
+      : "";
+    const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
+    const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
+    const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote;
+
+    async function attemptGemini(keyEntry) {
+      geminiPool.recordAttempt(keyEntry);
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${keyEntry.key}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: contextWithName }] },
+          contents: [...history, { role: "user", parts: [{ text: lastMsg.content }] }],
+          generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(`[Gemini Error - ${keyEntry.label}]`, data);
+        const msg = data.error?.message || `API Error ${response.status}`;
+        const isQuotaError =
+          response.status === 429 ||
+          msg.toLowerCase().includes("quota") ||
+          msg.toLowerCase().includes("rate limit");
+
+        const err = new Error(msg);
+        err.quotaExceeded = isQuotaError;
+        throw err;
+      }
+
+      return data;
+    }
+
+    // ===== GEMINI: pool ki har available key try karo jab tak koi kaam kar jaye =====
+    let geminiKeyEntry = geminiPool.getAvailableKey();
+    let triedAnyGemini = false;
+
+    while (geminiKeyEntry) {
+      triedAnyGemini = true;
       try {
-        recordGeminiAttempt();
-
-        const history = messages.slice(0, -1).map((m) => ({
-          role: m.role === "assistant" ? "model" : "user",
-          parts: [{ text: m.content }],
-        }));
-        const lastMsg = messages[messages.length - 1];
-
-        const userNameNote = userName
-          ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
-          : "";
-        const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
-        const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
-        const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote;
-
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY_1}`;
-
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: contextWithName }] },
-            contents: [...history, { role: "user", parts: [{ text: lastMsg.content }] }],
-            generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          console.error("[Gemini Error]", data);
-          const msg = data.error?.message || `API Error ${response.status}`;
-
-          // ===== RATE LIMIT / QUOTA DETECTION =====
-          const isQuotaError =
-            response.status === 429 ||
-            msg.toLowerCase().includes("quota") ||
-            msg.toLowerCase().includes("rate limit");
-
-          if (isQuotaError) {
-            const err = new Error(msg);
-            err.quotaExceeded = true;
-            throw err;
-          }
-
-          throw new Error(msg);
-        }
-
+        const data = await attemptGemini(geminiKeyEntry);
         reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
         trackTokenUsage(data.usageMetadata);
         usage = getUsageSnapshot();
+        usedKeyLabel = geminiKeyEntry.label;
+        break; // success — loop se nikal jao
       } catch (err) {
         if (err.quotaExceeded) {
-          console.warn("[Fallback] Gemini ki limit khatam — Groq (backup) pe switch ho raha hai.");
-          provider = "groq";
-        } else {
-          throw err;
+          geminiPool.markExhausted(geminiKeyEntry);
+          geminiKeyEntry = geminiPool.getNextAvailableKey(geminiKeyEntry.label);
+          continue; // agli key try karo
         }
+        throw err; // koi aur (non-quota) error — seedha upar throw karo
       }
-    } else {
-      console.log("[Fallback] Gemini ka apna tracked budget (RPM/RPD) khatam — seedha Groq use ho raha hai.");
+    }
+
+    if (!reply) {
+      // Saari Gemini keys exhaust ho gayi (ya koi key configure hi nahi thi) — Groq pe jao
+      if (triedAnyGemini) {
+        console.warn("[Fallback] Gemini pool ki saari keys exhaust — Groq (backup) pe switch ho raha hai.");
+      } else {
+        console.log("[Fallback] Koi Gemini key available nahi thi — seedha Groq use ho raha hai.");
+      }
       provider = "groq";
     }
 
     if (provider === "groq") {
-      if (!GROQ_API_KEY) {
+      if (!groqPool.hasAnyKey()) {
         const resetInfo = getQuotaResetTime();
         return res.status(429).json({
           error: "Gemini ki free limit khatam ho gayi hai, aur backup (Groq) configure nahi hai.",
@@ -1060,7 +1088,42 @@ The system is automatically switching to a backup model so you can keep chatting
         });
       }
 
-      reply = await callGroqChat(messages, userName);
+      // ===== GROQ: pool ki har available key try karo jab tak koi kaam kar jaye =====
+      let groqKeyEntry = groqPool.getAvailableKey();
+      if (!groqKeyEntry) {
+        const resetInfo = getQuotaResetTime();
+        return res.status(429).json({
+          error: "Gemini aur Groq — dono ki saari keys ki aaj ki limit khatam ho chuki hai.",
+          quotaExceeded: true,
+          resetTimePKT: resetInfo.formatted,
+          hoursRemaining: resetInfo.hoursRemaining,
+        });
+      }
+
+      while (groqKeyEntry) {
+        try {
+          reply = await callGroqChat(messages, userName, groqKeyEntry);
+          usedKeyLabel = groqKeyEntry.label;
+          break;
+        } catch (err) {
+          if (err.isQuotaError) {
+            groqPool.markExhausted(groqKeyEntry);
+            groqKeyEntry = groqPool.getNextAvailableKey(groqKeyEntry.label);
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!reply) {
+        const resetInfo = getQuotaResetTime();
+        return res.status(429).json({
+          error: "Gemini aur Groq — dono ki saari keys ki aaj ki limit khatam ho chuki hai.",
+          quotaExceeded: true,
+          resetTimePKT: resetInfo.formatted,
+          hoursRemaining: resetInfo.hoursRemaining,
+        });
+      }
     }
 
     res.json({ reply, usage, provider, isFirstFallback: false });
@@ -1238,6 +1301,14 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/usage", (req, res) => {
   res.json(getUsageSnapshot());
+});
+
+// ===== KEY POOL STATUS (debugging ke liye — kaunsi key kitni use hui) =====
+app.get("/api/keys-status", (req, res) => {
+  res.json({
+    gemini: geminiPool.getStatus(),
+    groq: groqPool.getStatus(),
+  });
 });
 
 // ===== Status =====

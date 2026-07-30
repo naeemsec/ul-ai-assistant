@@ -700,6 +700,66 @@ ${entry.message || "(no message provided)"}`;
   }
 }
 
+// ============================================================
+// ERROR ALERT EMAIL — jab bhi koi unexpected server error aaye (jo
+// user ko "Internal Issue / Boss Naeem" wala generic message dikhata
+// hai), Boss ko turant email chali jaye — pooora dev-info ke sath
+// (jo production mein user ko kabhi nahi dikhta).
+// ============================================================
+// Simple cooldown — agar koi bug baar baar trigger ho raha ho (jaise
+// koi loop mein fail ho raha ho), to Boss ka inbox spam na ho.
+const ERROR_ALERT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minute
+let lastErrorAlertSentAt = 0;
+
+async function sendErrorAlertEmail({ endpoint, errorMessage, deviceId }) {
+  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
+    return; // Email configure nahi hai — chup chaap skip karo, user experience block nahi honi chahiye
+  }
+
+  const now = Date.now();
+  if (now - lastErrorAlertSentAt < ERROR_ALERT_COOLDOWN_MS) {
+    console.log("[Error Alert] Cooldown active — email skip ki gayi (console log dekh lein).");
+    return;
+  }
+  lastErrorAlertSentAt = now;
+
+  try {
+    const subject = `🚨 UL AI Server Error — ${endpoint}`;
+    const bodyText = `An internal server error occurred on UL AI.
+
+Endpoint: ${endpoint}
+Time: ${new Date().toLocaleString()}
+Device ID: ${deviceId || "unknown"}
+
+--- Dev Info (raw error, users never see this) ---
+${errorMessage}`;
+
+    const rawMessage = [
+      `From: "UL AI Alerts" <${FEEDBACK_EMAIL_USER}>`,
+      `To: ${FEEDBACK_EMAIL_TO}`,
+      `Subject: ${encodeMimeHeader(subject)}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      "",
+      bodyText,
+    ].join("\n");
+
+    const accessToken = await getGmailAccessToken();
+
+    await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ raw: base64UrlEncode(rawMessage) }),
+    });
+  } catch (emailErr) {
+    // Ye fail bhi ho jaye to koi masla nahi — user ko normal error message hi milega,
+    // bas Boss ko extra alert nahi milegi is dafa.
+    console.error("[Error Alert Email Failed]", emailErr);
+  }
+}
+
 function trackTokenUsage(usageMetadata) {
   const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   if (todayPT !== usageTrackerDatePT) {
@@ -1129,6 +1189,11 @@ The system is automatically switching to a backup model so you can keep chatting
     res.json({ reply, usage, provider, isFirstFallback: false });
   } catch (err) {
     console.error("[Server Error]", err);
+    sendErrorAlertEmail({
+      endpoint: "/api/chat",
+      errorMessage: err.stack || err.message || String(err),
+      deviceId: req.body?.deviceId,
+    }); // fire-and-forget — user ke response ko delay/block nahi karna
     res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
   }
 });
@@ -1197,6 +1262,11 @@ app.post("/api/pdf-chat", minuteLimiter, dailyLimiter, async (req, res) => {
     res.json({ reply, usage: getUsageSnapshot() });
   } catch (err) {
     console.error("[Server Error - PDF Chat]", err);
+    sendErrorAlertEmail({
+      endpoint: "/api/pdf-chat",
+      errorMessage: err.stack || err.message || String(err),
+      deviceId: req.body?.deviceId,
+    }); // fire-and-forget — user ke response ko delay/block nahi karna
     res.status(500).json({ error: sanitizeError(err.message || "Internal server error") });
   }
 });

@@ -64,6 +64,10 @@ ul-ai-assistant/
 │   └── server.js          # Backend server (API logic)
 │   └── pdf-chat.js        # AI PDF-Chat Backend
 │   └── token-usage.json   # Count token usage/day
+│   └── voice.js           # Handle VOice-Inputs/Outputs
+│   └── keyPool.js         # Manage APIs
+│   └── merit-list.js      # Manage web connections
+│   └── past-papers.js     # Checks and Display PP
 ├── .env
 ├── .gitignore
 ├── CONTRIBUTING.md
@@ -100,6 +104,7 @@ ul-ai-assistant/
      GEMINI_API_KEY_1=your_api_key_here
      GEMINI_MODEL=gemini-3.5-flash
      PORT=3000
+     GROQ_API_KEY_1=your_api_key_here
      ...
      ```
 
@@ -117,7 +122,8 @@ This project includes a Node.js backend and requires a hosting platform that sup
 - [Render](https://render.com)
 - [Railway](https://railway.app)
 
-When deploying, set the `GEMINI_API_KEY` and `GEMINI_MODEL` as environment variables in your hosting platform's dashboard — do not commit them to the repository.
+When deploying, set all `GEMINI_API_KEY` and `GEMINI_MODEL` as environment variables in your hosting platform's dashboard — do not commit them to the repository. You can see `.env.example` to 
+check what is necessory.
 
 ## Security Notes
 

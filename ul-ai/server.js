@@ -262,7 +262,7 @@ UMS (UNIVERSITY MANAGEMENT SYSTEM) / STUDENT PORTAL:
 - Jab koi student "result kaise dekhun" ya "apna profile kaise dekhun" ya "UMS  kya hai" pooche, unhe yeh login link aur upar wale steps batao
 
 DEVELOPER/BOSS
-- Boss/Sir Naeem from CS 2025-29
+- Boss/Sir Naeem from CS'29
 - Created to assist students with university information and academic support.
 - Developed: June 2026  
 
@@ -760,6 +760,355 @@ ${errorMessage}`;
   }
 }
 
+
+// ============================================================
+// SMART FAQ CACHE — Google Drive pe persist hota hai
+// ============================================================
+// Flow:
+//   1. Pehli request aaye → Drive se faq_cache.json load karo (agar exist kare)
+//   2. Agar nahi mili ya expire ho gayi (FAQ_CACHE_TTL_DAYS se zyada purani) → AI se fresh FAQs generate karo
+//   3. Naya cache Drive pe save karo (faq_cache.json update/create)
+//   4. Agli request mein → memory mein check, phir Drive — AI ko call nahi karna padega
+//
+// Expiry strategy:
+//   - Har entry ke saath "generatedAt" timestamp save hoti hai
+//   - TTL: FAQ_CACHE_TTL_DAYS (default 7 din) — Drive wali file hi source of truth hai
+//   - Server restart ke baad bhi data rehta hai kyunke Drive pe hai
+// ============================================================
+
+const FAQ_CACHE_FILENAME = "ul_ai_faq_cache.json";
+const FAQ_CACHE_TTL_DAYS = parseInt(process.env.FAQ_CACHE_TTL_DAYS, 10) || 7;
+const FAQ_CACHE_TTL_MS   = FAQ_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+// In-memory layer — Drive se ek baar load hone ke baad yahan rehta hai (fast access)
+let faqMemoryCache = {
+  fileId:   null,   // Drive file ID (update ke liye zaroori)
+  data:     null,   // parsed JSON { faqs: [...], generatedAt: ISO string }
+  loadedAt: 0,      // kb Drive se load kiya
+};
+
+// ── Drive + Gmail — same refresh token, same credentials ──
+// Naya naam diya taake intent clear rahe: ye dono kaam karta hai
+async function getGoogleAccessToken() {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id:     GMAIL_CLIENT_ID,
+      client_secret: GMAIL_CLIENT_SECRET,
+      refresh_token: GMAIL_REFRESH_TOKEN,
+      grant_type:    "refresh_token",
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error_description || "Failed to get Google access token");
+  return data.access_token;
+}
+
+// ── Drive mein faq cache file dhundho ──
+async function findFaqFileOnDrive(accessToken) {
+  const query = `name='${FAQ_CACHE_FILENAME}' and trashed=false`;
+  const url   = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,modifiedTime)&spaces=drive`;
+  const res   = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Drive search error ${res.status}`);
+  return data.files?.[0] || null;
+}
+
+// ── Drive se file download karo ──
+async function downloadFaqFromDrive(accessToken, fileId) {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const res  = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Drive download error ${res.status}`);
+  return await res.json();
+}
+
+// ── Drive pe naya file create karo (pehli baar) ──
+async function createFaqFileOnDrive(accessToken, cacheData) {
+  const metadata = JSON.stringify({ name: FAQ_CACHE_FILENAME, mimeType: "application/json" });
+  const content  = JSON.stringify(cacheData, null, 2);
+  const boundary = "faq_cache_ul_ai_boundary";
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    metadata,
+    `--${boundary}`,
+    "Content-Type: application/json",
+    "",
+    content,
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  const res = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+    {
+      method:  "POST",
+      headers: {
+        Authorization:  `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `Drive create error ${res.status}`);
+  console.log(`[FAQ Cache] Drive pe naya file create hua — ID: ${data.id}`);
+  return data.id;
+}
+
+// ── Existing Drive file update karo ──
+async function updateFaqFileOnDrive(accessToken, fileId, cacheData) {
+  const res = await fetch(
+    `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+    {
+      method:  "PATCH",
+      headers: {
+        Authorization:  `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(cacheData, null, 2),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Drive update error ${res.status}`);
+  }
+  console.log(`[FAQ Cache] Drive file update ho gayi — ID: ${fileId}`);
+}
+
+// ── Drive se memory mein load karo ──
+async function loadFaqCacheFromDrive() {
+  const nowMs = Date.now();
+  // 1 minute ke andar dobara Drive ko ping mat karo
+  if (faqMemoryCache.data && (nowMs - faqMemoryCache.loadedAt) < 60_000) return;
+
+  try {
+    const accessToken = await getGoogleAccessToken();
+    const file        = await findFaqFileOnDrive(accessToken);
+    if (!file) {
+      console.log("[FAQ Cache] Drive pe file nahi mili — fresh generate hogi.");
+      return;
+    }
+    const data = await downloadFaqFromDrive(accessToken, file.id);
+    faqMemoryCache = { fileId: file.id, data, loadedAt: nowMs };
+    console.log(`[FAQ Cache] Drive se load hua — generatedAt: ${data.generatedAt}, FAQs: ${data.faqs?.length}`);
+  } catch (err) {
+    console.error("[FAQ Cache] Drive load error (non-fatal):", err.message);
+  }
+}
+
+// ── Cache ki expiry check karo ──
+function isFaqCacheExpired() {
+  if (!faqMemoryCache.data?.generatedAt) return true;
+  const age = Date.now() - new Date(faqMemoryCache.data.generatedAt).getTime();
+  return age > FAQ_CACHE_TTL_MS;
+}
+
+// ── Gemini se fresh FAQs generate karo ──
+async function generateFaqsWithAI() {
+  const prompt = `Based on the University of Layyah information you know, generate a list of exactly 15 most commonly asked questions by students, along with clear and accurate answers.
+
+Return ONLY a valid JSON array — no explanation, no markdown, no extra text.
+
+Format strictly:
+[
+  {
+    "question": "...",
+    "answer": "...",
+    "category": "admissions|fees|programs|campus|results|scholarships|general"
+  }
+]
+
+Questions should cover: admissions process, fee structure, programs offered, merit calculation, campus facilities, hostel, scholarships, exam system, contact info, UMS portal.
+Keep answers concise (2-4 sentences max). Use simple English.`;
+
+  const keyEntry = geminiPool.getAvailableKey();
+  if (!keyEntry) throw new Error("Koi Gemini key available nahi — FAQ generate nahi ho sakta.");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${keyEntry.key}`;
+  const res  = await fetch(url, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: UNIVERSITY_CONTEXT }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0.3,
+        response_mime_type: "application/json",
+        response_schema: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              question: { type: "STRING" },
+              answer:   { type: "STRING" },
+              category: {
+                type: "STRING",
+                enum: ["admissions", "fees", "programs", "campus", "results", "scholarships", "general"],
+              },
+            },
+            required: ["question", "answer", "category"],
+          },
+        },
+      },
+    }),
+  });
+  const data = await res.json();
+  geminiPool.recordAttempt(keyEntry);
+
+  if (!res.ok) throw new Error(data.error?.message || `Gemini error ${res.status}`);
+
+  // Agar response beech mein kat gaya ho (token limit khatam), to saaf error do
+  // taake pata chale asal wajah kya thi, aur retry kiya ja sake
+  const finishReason = data.candidates?.[0]?.finishReason;
+  if (finishReason === "MAX_TOKENS") {
+    throw new Error("Gemini response truncated ho gaya (MAX_TOKENS) — maxOutputTokens aur badhana pare ga ya kam FAQs mangwao.");
+  }
+
+  let raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  raw = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+
+  let faqs;
+  try {
+    faqs = JSON.parse(raw);
+  } catch (parseErr) {
+    console.error("[FAQ Cache] JSON parse fail — raw response:", raw); // pura raw response, sirf 300 chars nahi
+    throw new Error(`AI response valid JSON nahi thi: ${parseErr.message}`);
+  }
+  if (!Array.isArray(faqs)) throw new Error("AI ne valid JSON array return nahi kiya.");
+
+  trackTokenUsage(data.usageMetadata);
+  return faqs;
+}
+
+// ── Fresh cache banao aur Drive pe save karo ──
+async function refreshFaqCache() {
+  console.log("[FAQ Cache] AI se fresh FAQs generate ho rahi hain...");
+  const faqs = await generateFaqsWithAI();
+
+  const cacheData = {
+    faqs,
+    generatedAt: new Date().toISOString(),
+    expiresAt:   new Date(Date.now() + FAQ_CACHE_TTL_MS).toISOString(),
+    ttlDays:     FAQ_CACHE_TTL_DAYS,
+  };
+
+  // Drive pe save karo (fail hone pe bhi memory mein available rahega)
+  try {
+  //   // async function getGoogleAccessToken() {
+  //   // const response = await fetch("https://oauth2.googleapis.com/token", {
+  //   //   method: "POST",
+  //   //   headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  //   //   body: new URLSearchParams({
+  //   //     client_id:     GMAIL_CLIENT_ID,
+  //   //     client_secret: GMAIL_CLIENT_SECRET,
+  //   //     refresh_token: GMAIL_REFRESH_TOKEN,
+  //   //     grant_type:    "refresh_token",
+  //   //   }),
+  //   // });
+  //   const data = await response.json();
+  //   console.log("[DEBUG] Token exchange response:", JSON.stringify(data)); // TEMP — baad mein hata dena
+  //   if (!response.ok) throw new Error(data.error_description || data.error || "Failed to get Google access token");
+  //   return data.access_token;
+  // } 
+    const accessToken = await getGoogleAccessToken();
+    if (faqMemoryCache.fileId) {
+      await updateFaqFileOnDrive(accessToken, faqMemoryCache.fileId, cacheData);
+    } else {
+      const existing = await findFaqFileOnDrive(accessToken);
+      if (existing) {
+        await updateFaqFileOnDrive(accessToken, existing.id, cacheData);
+        faqMemoryCache.fileId = existing.id;
+      } else {
+        const newId = await createFaqFileOnDrive(accessToken, cacheData);
+        faqMemoryCache.fileId = newId;
+      }
+    }
+  } catch (driveErr) {
+    console.error("[FAQ Cache] Drive save error (non-fatal — memory mein available hai):", driveErr.message);
+  }
+
+  faqMemoryCache.data     = cacheData;
+  faqMemoryCache.loadedAt = Date.now();
+  console.log(`[FAQ Cache] ${faqs.length} FAQs ready — expires: ${cacheData.expiresAt}`);
+  return cacheData;
+}
+
+// ── Public getter: Drive check → memory → refresh if expired ──
+async function getSmartFaqs() {
+  if (!faqMemoryCache.data) {
+    await loadFaqCacheFromDrive();
+  }
+  if (faqMemoryCache.data && !isFaqCacheExpired()) {
+    console.log(`[FAQ Cache] Cache hit — generatedAt: ${faqMemoryCache.data.generatedAt}`);
+    return faqMemoryCache.data;
+  }
+  return await refreshFaqCache();
+}
+
+// ===== FAQ ENDPOINT =====
+app.get("/api/faqs", async (req, res) => {
+  try {
+    const cacheData = await getSmartFaqs();
+    res.json({
+      faqs:        cacheData.faqs,
+      generatedAt: cacheData.generatedAt,
+      expiresAt:   cacheData.expiresAt,
+      ttlDays:     cacheData.ttlDays,
+      fromCache:   true,
+    });
+  } catch (err) {
+    console.error("[Server Error - FAQs]", err);
+    sendErrorAlertEmail({
+      endpoint:     "/api/faqs",
+      errorMessage: err.stack || err.message || String(err),
+      deviceId:     req.query?.deviceId,
+    });
+    res.status(500).json({ error: sanitizeError(err.message || "Could not load FAQs.") });
+  }
+});
+
+// ===== FAQ FORCE REFRESH — admin only =====
+// Header: x-admin-secret: <ADMIN_SECRET env var>
+app.post("/api/faqs/refresh", async (req, res) => {
+  const secret = process.env.ADMIN_SECRET;
+  if (secret && req.headers["x-admin-secret"] !== secret) {
+    return res.status(403).json({ error: "Unauthorized." });
+  }
+  try {
+    faqMemoryCache.data     = null;
+    faqMemoryCache.loadedAt = 0;
+    const cacheData = await refreshFaqCache();
+    res.json({
+      success:     true,
+      faqs:        cacheData.faqs.length,
+      generatedAt: cacheData.generatedAt,
+      expiresAt:   cacheData.expiresAt,
+    });
+  } catch (err) {
+    console.error("[Server Error - FAQ Refresh]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "FAQ refresh failed.") });
+  }
+});
+
+// ── Server start pe Drive se warm-up (background, non-blocking) ──
+setImmediate(() => {
+  loadFaqCacheFromDrive()
+    .then(() => {
+      if (faqMemoryCache.data && !isFaqCacheExpired()) {
+        console.log("[FAQ Cache] Warm-up complete — Drive cache ready.");
+      } else {
+        console.log("[FAQ Cache] Cache empty/expired — first /api/faqs request pe generate hogi.");
+      }
+    })
+    .catch((err) => console.error("[FAQ Cache] Warm-up error:", err.message));
+});
+
+// ============================================================
 function trackTokenUsage(usageMetadata) {
   const todayPT = new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" });
   if (todayPT !== usageTrackerDatePT) {

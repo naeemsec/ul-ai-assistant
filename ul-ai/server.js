@@ -5,6 +5,7 @@ const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const rateLimit = require("express-rate-limit")
+const Fuse = require("fuse.js");
 
 const app = express();
 
@@ -1049,7 +1050,45 @@ async function getSmartFaqs() {
   }
   return await refreshFaqCache();
 }
+// ===== FAQ FUZZY MATCH — AI call se pehle check, quota bachane ke liye =====
+async function tryFaqMatch(userMessage) {
+  try {
+    const cacheData = await getSmartFaqs(); // pehle se cached hai to fast hoga
+    if (!cacheData?.faqs?.length) return null;
 
+    // "question" ke ilawa "answer" bhi search karte hain — user kabhi kabhi
+    // wahi keywords use karta hai jo answer mein hain, question mein nahi.
+    // Choti weight di hai answer ko taake question-match ko priority mile.
+    const fuse = new Fuse(cacheData.faqs, {
+      keys: [
+        { name: "question", weight: 0.7 },
+        { name: "answer", weight: 0.3 },
+      ],
+      threshold: 0.45,        // 0.35 se relax kiya — paraphrased sawal bhi match ho sakein
+      ignoreLocation: true,
+      includeScore: true,
+    });
+
+    const results = fuse.search(userMessage);
+
+    // DEBUG — tuning ke liye. Threshold theek lagne lage to ye line hata dena.
+    if (results.length > 0) {
+      console.log(
+        `[FAQ Match Debug] "${userMessage}" → top match: "${results[0].item.question}" (score: ${results[0].score.toFixed(3)})`
+      );
+    } else {
+      console.log(`[FAQ Match Debug] "${userMessage}" → koi candidate hi nahi mila`);
+    }
+
+    if (results.length > 0 && results[0].score < 0.45) {
+      return results[0].item; // { question, answer, category }
+    }
+    return null;
+  } catch (err) {
+    console.error("[FAQ Match] error (non-fatal):", err.message);
+    return null; // fail-safe — error aaye to normal AI flow chalta rahega
+  }
+}
 // ===== FAQ ENDPOINT =====
 app.get("/api/faqs", async (req, res) => {
   try {
@@ -1406,6 +1445,18 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
     const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
     const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
     const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote;
+
+    // ===== FAQ MATCH CHECK — Gemini/Groq call se pehle, quota bachane ke liye =====
+    const faqMatch = await tryFaqMatch(lastMsg.content);
+    if (faqMatch) {
+      console.log(`[FAQ Match] Sawal FAQ se match hua: "${faqMatch.question}"`);
+      return res.json({
+        reply: faqMatch.answer,
+        usage: getUsageSnapshot(),
+        provider: "faq_cache",
+        isFirstFallback: false,
+      });
+    }
 
     async function attemptGemini(keyEntry) {
       geminiPool.recordAttempt(keyEntry);

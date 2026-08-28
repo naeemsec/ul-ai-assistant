@@ -626,7 +626,7 @@ function createCopyButton(textContent) {
 }
 
 // ===== TYPEWRITER EFFECT (word-by-word, fast) =====
-function typewriterMessage(text) {
+function typewriterMessage(text, provider = "gemini") {
   const div = document.createElement("div");
   div.className = "message ai";
  
@@ -665,9 +665,19 @@ function typewriterMessage(text) {
         setTimeout(typeWord, speed);
       } else {
         bubble.innerHTML = formatText(text);
+
+        // FAQ source badge
+        if (provider === "faq_cache") {
+          const sourceBadge = document.createElement("div");
+          sourceBadge.className = "faq-source-badge";
+          sourceBadge.textContent = "Source: FAQs";
+          bubble.appendChild(sourceBadge);
+        }
+
         const actionsWrap2 = createCopyButton(text);
         div.appendChild(actionsWrap2);
         actionsWrap2.appendChild(createSpeakerButton(text));
+
         currentTypewriterResolve = null;
         resolve();
       }
@@ -872,12 +882,14 @@ async function handleSend() {
  
   try {
     let reply;
+    let provider = "gemini";
 
     if (pdfChatMode && attachedPdfText) {
       reply = await callPdfChatAPI(pdfChatMessages, attachedPdfText);
     } else {
       const result = await callGeminiAPI(getSession().messages);
       reply = result.reply;
+      provider = result.provider;
     }
     removeTyping();
 
@@ -886,7 +898,7 @@ async function handleSend() {
     } else {
       getSession().messages.push({ role: "assistant", content: reply });
     }
-    await typewriterMessage(reply);
+    await typewriterMessage(reply, provider);
     if (!pdfChatMode) saveSessions();
   } catch (err) {
     removeTyping();

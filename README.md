@@ -61,14 +61,16 @@ ul-ai-assistant/
 │   ├── index.html         # Application structure
 │   ├── style.css          # Styling and themes
 |   ├── app.js             # Web Logic
-│   └── server.js          # Backend server (API logic)
-│   └── pdf-chat.js        # AI PDF-Chat Backend
-│   └── token-usage.json   # Count token usage/day
-│   └── voice.js           # Handle VOice-Inputs/Outputs
-│   └── keyPool.js         # Manage APIs
-│   └── merit-list.js      # Manage web connections
-│   └── past-papers.js     # Checks and Display PP
+|   ├── server.js          # Backend server (API logic)
+|   ├── pdf-chat.js        # AI PDF-Chat Backend
+|   ├── token-usage.json   # Count token usage/day
+|   ├── voice.js           # Handle Voice-Inputs/Outputs
+|   ├── keyPool.js         # Manage APIs
+|   ├── merit-list.js      # Manage web connections
+|   ├── past-papers.js     # Checks and Display PP
+│   └── whatsnew.js        # Display changes
 ├── .env
+├── .env.example
 ├── .gitignore
 ├── CONTRIBUTING.md
 ├── LICENSE
@@ -83,6 +85,7 @@ ul-ai-assistant/
 
 - Node.js (v18 or higher)
 - A Google Gemini API key ([Get one here](https://aistudio.google.com))
+- A GROQ API key ([Get one here](https://aistudio.google.com))
 
 ### Installation
 

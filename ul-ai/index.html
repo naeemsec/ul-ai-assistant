@@ -231,39 +231,122 @@
   </main>
 </div>
 
-<!-- ===== FEEDBACK MODAL ===== -->
-<div class="modal-overlay" id="feedbackModal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">
-        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.5 0-2.9-.32-4.13-.88L3 20l1.03-3.4C3.37 15.36 3 13.72 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-        Share Your Feedback
-      </div>
-      <button class="modal-close" id="closeFeedback">✕</button>
+<!-- ===== "PHONE" MOCKUP — Home screen + apps ===== -->
+<div class="phone-overlay" id="feedbackModal">
+  <div class="phone-frame">
+    <div class="phone-status-bar">
+      <div class="phone-notch"></div>
+      <span class="phone-time" id="phoneTime">9:41</span>
+      <span class="phone-status-icons">📶 📡 🔋</span>
     </div>
-    <div class="modal-body">
-      <p class="feedback-intro">This project is new — your feedback helps us make it better!</p>
 
-      <input type="text" id="feedbackName" class="feedback-name-input" placeholder="Your name (optional)" maxlength="50" />
-
-      <div class="feedback-stars" id="feedbackStars">
-        <button type="button" class="star-btn" data-value="1">★</button>
-        <button type="button" class="star-btn" data-value="2">★</button>
-        <button type="button" class="star-btn" data-value="3">★</button>
-        <button type="button" class="star-btn" data-value="4">★</button>
-        <button type="button" class="star-btn" data-value="5">★</button>
+    <div class="phone-screen">
+      <div class="phone-app-header">
+        <button class="phone-back-btn hidden" id="phoneBackBtn" title="Back">‹</button>
+        <div class="phone-app-title" id="phoneAppTitle">UL AI</div>
+        <span class="phone-header-spacer"></span>
       </div>
 
-      <div class="feedback-category-row" id="feedbackCategoryRow">
-        <button type="button" class="feedback-cat-btn active" data-cat="general">💬 General</button>
-        <button type="button" class="feedback-cat-btn" data-cat="bug">🐛 Bug Report</button>
-        <button type="button" class="feedback-cat-btn" data-cat="feature">✨ Feature Request</button>
+      <!-- ===== HOME SCREEN — app icon grid ===== -->
+      <div class="phone-home-grid" id="phoneHomeGrid">
+        <button class="phone-app-icon" data-app="whatsnew">
+          <span class="phone-icon-glyph icon-whatsnew">📢</span>
+          <span class="phone-icon-label">What's New</span>
+        </button>
+        <button class="phone-app-icon" data-app="feedback">
+          <span class="phone-icon-glyph icon-feedback">💬</span>
+          <span class="phone-icon-label">Feedback</span>
+        </button>
+        <button class="phone-app-icon" data-app="settings">
+          <span class="phone-icon-glyph icon-settings">⚙️</span>
+          <span class="phone-icon-label">Settings</span>
+        </button>
+        <button class="phone-app-icon" data-app="about">
+          <span class="phone-icon-glyph icon-about">ℹ️</span>
+          <span class="phone-icon-label">About</span>
+        </button>
+        <button class="phone-app-icon" data-app="stats">
+          <span class="phone-icon-glyph icon-stats">📊</span>
+          <span class="phone-icon-label">Usage Stats</span>
+        </button>
+        <button class="phone-app-icon" data-app="contact">
+          <span class="phone-icon-glyph icon-contact">📞</span>
+          <span class="phone-icon-label">Contact</span>
+        </button>
       </div>
 
-      <textarea id="feedbackMessage" class="feedback-textarea" placeholder="Tell us what's working, what's not, or what you'd like to see..." rows="4"></textarea>
+      <!-- ===== APP: What's New — content whatsnew.js se dynamically load hota hai ===== -->
+      <div class="phone-app-panel hidden" id="phoneApp-whatsnew"></div>
 
-      <button class="feedback-send-btn" id="feedbackSendBtn">Send Feedback</button>
+      <!-- ===== APP: Feedback ===== -->
+      <div class="phone-app-panel hidden" id="phoneApp-feedback">
+        <p class="feedback-intro">This project is new — your feedback helps us make it better!</p>
+
+        <input type="text" id="feedbackName" class="feedback-name-input" placeholder="Your name (optional)" maxlength="50" />
+
+        <div class="feedback-stars" id="feedbackStars">
+          <button type="button" class="star-btn" data-value="1">★</button>
+          <button type="button" class="star-btn" data-value="2">★</button>
+          <button type="button" class="star-btn" data-value="3">★</button>
+          <button type="button" class="star-btn" data-value="4">★</button>
+          <button type="button" class="star-btn" data-value="5">★</button>
+        </div>
+
+        <div class="feedback-category-row" id="feedbackCategoryRow">
+          <button type="button" class="feedback-cat-btn active" data-cat="general">💬 General</button>
+          <button type="button" class="feedback-cat-btn" data-cat="bug">🐛 Bug Report</button>
+          <button type="button" class="feedback-cat-btn" data-cat="feature">✨ Feature Request</button>
+        </div>
+
+        <textarea id="feedbackMessage" class="feedback-textarea" placeholder="Tell us what's working, what's not, or what you'd like to see..." rows="4"></textarea>
+
+        <button class="feedback-send-btn" id="feedbackSendBtn">Send Feedback</button>
+      </div>
+
+      <!-- ===== APP: Usage Stats ===== -->
+      <div class="phone-app-panel hidden" id="phoneApp-stats">
+        <div class="stats-card">
+          <div class="stats-label">Today's Token Usage</div>
+          <div class="stats-value" id="phoneStatsPct">0% Used</div>
+          <div class="stats-bar-track"><div class="stats-bar-fill" id="phoneStatsBarFill"></div></div>
+        </div>
+        <p class="stats-note">This estimates how much of today's free AI quota has been used across all users.</p>
+      </div>
+
+      <!-- ===== APP: Contact ===== -->
+      <div class="phone-app-panel hidden" id="phoneApp-contact">
+        <div class="contact-row">
+          <span class="contact-icon">🌐</span>
+          <div>
+            <div class="contact-label">Website</div>
+            <a href="https://ul.edu.pk" target="_blank" class="contact-value">ul.edu.pk</a>
+          </div>
+        </div>
+        <div class="contact-row">
+          <span class="contact-icon">✉️</span>
+          <div>
+            <div class="contact-label">Admissions</div>
+            <a href="https://ul.edu.pk/admissions" target="_blank" class="contact-value">ul.edu.pk/admissions</a>
+          </div>
+        </div>
+        <div class="contact-row">
+          <span class="contact-icon">📋</span>
+          <div>
+            <div class="contact-label">Merit Lists</div>
+            <a href="https://ul.edu.pk/program_merit_list" target="_blank" class="contact-value">ul.edu.pk/program_merit_list</a>
+          </div>
+        </div>
+        <div class="contact-row">
+          <span class="contact-icon">💬</span>
+          <div>
+            <div class="contact-label">Need more help?</div>
+            <div class="contact-value">Use the Feedback app to reach the developer directly.</div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <button class="phone-home-btn" id="phoneHomeBtn" title="Close"></button>
   </div>
 </div>
 
@@ -379,6 +462,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="pdf-chat.js"></script>
 <script src="merit-list.js"></script>
+<script src="whatsnew.js"></script>
 <script src="app.js"></script>
 <script src="voice.js"></script>
 <script src="past-papers.js"></script>
@@ -390,4 +474,3 @@
 </script>
 </body>
 </html>
-

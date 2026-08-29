@@ -110,10 +110,17 @@ function toggleSpeech(text, btn) {
     const voice = getOutputVoice();
     if (voice) utterance.voice = voice;
     utterance.lang = voice?.lang || "en-US";
+
+    // ===== NAYI LINES — button ki "speaking" state track karne ke liye =====
+    utterance.onend = () => resetSpeakerButton();
+    utterance.onerror = () => resetSpeakerButton();
+    currentSpeakerBtn = btn;
+    btn.classList.add("speaking");
+    // ========================================================
+
     speechSynthesis.speak(utterance);
   };
 
-  // Voices load hone ka wait karo
   const voices = speechSynthesis.getVoices();
   if (voices.length > 0) {
     setVoiceAndSpeak();
@@ -123,7 +130,6 @@ function toggleSpeech(text, btn) {
       setVoiceAndSpeak();
     };
   }
-  return; // neeche wala speak() hata do
 }
 
 function resetSpeakerButton() {

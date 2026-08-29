@@ -45,7 +45,8 @@ const settingsModal  = document.getElementById("settingsModal");
 // ===== FEEDBACK DOM REFS =====
 const feedbackFab          = document.getElementById("feedbackFab");
 const feedbackModal        = document.getElementById("feedbackModal");
-const closeFeedback        = document.getElementById("closeFeedback");
+const phoneHomeBtn         = document.getElementById("phoneHomeBtn");
+const phoneBackBtn         = document.getElementById("phoneBackBtn");
 const feedbackStars        = document.getElementById("feedbackStars");
 const feedbackName         = document.getElementById("feedbackName");
 const feedbackCategoryRow  = document.getElementById("feedbackCategoryRow");
@@ -91,6 +92,86 @@ document.addEventListener("DOMContentLoaded", () => {
  
 let isProductionEnv = false;
 
+function updatePhoneClock() {
+  const el = document.getElementById("phoneTime");
+  if (!el) return;
+  const now = new Date();
+  let h = now.getHours();
+  const m = now.getMinutes().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  el.textContent = `${h}:${m} ${ampm}`;
+}
+
+// ===== PHONE HOME-SCREEN NAVIGATION =====
+const PHONE_APP_TITLES = {
+  whatsnew: "What's New",
+  feedback: "Feedback",
+  stats:    "Usage Stats",
+  contact:  "Contact",
+};
+
+function showPhoneHome() {
+  document.getElementById("phoneHomeGrid").classList.remove("hidden");
+  document.querySelectorAll(".phone-app-panel").forEach((p) => p.classList.add("hidden"));
+  phoneBackBtn.classList.add("hidden");
+  document.getElementById("phoneAppTitle").textContent = "UL AI";
+}
+
+function openPhoneApp(appName) {
+  // Settings/About already have their own polished modals — reuse them directly,
+  // close the phone so they don't stack on top of it.
+  if (appName === "settings" || appName === "about") {
+    feedbackModal.classList.remove("open");
+    settingsModal.classList.add("open");
+    return;
+  }
+
+  const panel = document.getElementById(`phoneApp-${appName}`);
+  if (!panel) return;
+
+  if (appName === "stats") syncPhoneStats();
+  if (appName === "whatsnew") renderWhatsNew(panel);
+
+  document.getElementById("phoneHomeGrid").classList.add("hidden");
+  document.querySelectorAll(".phone-app-panel").forEach((p) => p.classList.add("hidden"));
+  panel.classList.remove("hidden");
+  phoneBackBtn.classList.remove("hidden");
+  document.getElementById("phoneAppTitle").textContent = PHONE_APP_TITLES[appName] || "UL AI";
+}
+
+// Usage Stats app ke liye — jo bhi already topbar mein token % dikh raha hai wahi mirror kar do
+function syncPhoneStats() {
+  const mainPct = document.getElementById("tokenUsagePct");
+  const pctEl = document.getElementById("phoneStatsPct");
+  const barEl = document.getElementById("phoneStatsBarFill");
+  if (!mainPct || !pctEl || !barEl) return;
+
+  const text = mainPct.textContent || "0% Used";
+  const percent = parseInt(text, 10) || 0;
+  pctEl.textContent = text;
+  barEl.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+}
+
+// What's New app ke liye — whatsnew.js ki WHATS_NEW_ITEMS array se render karo.
+// Naya update daalne ke liye sirf whatsnew.js edit karna hai, ye function nahi.
+function renderWhatsNew(panel) {
+  if (typeof WHATS_NEW_ITEMS === "undefined" || !WHATS_NEW_ITEMS.length) {
+    panel.innerHTML = `<p class="stats-note">No updates yet.</p>`;
+    return;
+  }
+  panel.innerHTML = WHATS_NEW_ITEMS.map((item) => `
+    <div class="whatsnew-item">
+      <div class="whatsnew-top-row">
+        <div class="whatsnew-badge badge-${item.badge.toLowerCase()}">${item.badge}</div>
+        ${item.version ? `<div class="whatsnew-version">${item.version}</div>` : ""}
+      </div>
+      <div class="whatsnew-title">${item.title}</div>
+      <div class="whatsnew-desc">${item.desc}</div>
+    </div>
+  `).join("");
+}
+
 async function updateEnvironmentBadge() {
   const badge = document.getElementById("topbarBadge");
   if (!badge) return;
@@ -119,10 +200,17 @@ function setupEventListeners() {
 
   feedbackFab.addEventListener("click", () => {
     resetFeedbackForm();
+    updatePhoneClock();
+    showPhoneHome();
     feedbackModal.classList.add("open");
   });
-  closeFeedback.addEventListener("click", () => feedbackModal.classList.remove("open"));
+  phoneHomeBtn.addEventListener("click", () => feedbackModal.classList.remove("open"));
+  phoneBackBtn.addEventListener("click", () => showPhoneHome());
   feedbackModal.addEventListener("click", (e) => { if (e.target === feedbackModal) feedbackModal.classList.remove("open"); });
+
+  document.querySelectorAll(".phone-app-icon").forEach((icon) => {
+    icon.addEventListener("click", () => openPhoneApp(icon.dataset.app));
+  });
 
   feedbackStars.querySelectorAll(".star-btn").forEach((star) => {
     star.addEventListener("click", () => {
@@ -361,6 +449,7 @@ function updateWelcomeGreeting() {
     { before: "Welcome back, ",    name: userName, after: "! 👋" },
     { before: "Hello ",            name: userName, after: ", kya poochna hai? 🎓" },
     { before: "Aaj main aapki kya madad kar sakta hoon, ", name: userName, after: "?" },
+    { before: "Whats your plan, ", name: userName, after: "?" },
   ];
   const g = greetings[Math.floor(Math.random() * greetings.length)];
   const fullText = g.before + g.name + g.after;
@@ -586,10 +675,21 @@ function renderMessage(role, content) {
   bubble.innerHTML = formatText(content);
 
   div.appendChild(avatar);
-  div.appendChild(bubble);
 
   if (normalizedRole === "ai") {
-    div.appendChild(createCopyButton(content));
+    // typewriterMessage jaisa hi "message-content" wrapper use karo,
+    // taake bubble + actions hamesha column mein stack rahein (refresh ke baad bhi)
+    const contentWrap = document.createElement("div");
+    contentWrap.className = "message-content";
+    contentWrap.appendChild(bubble);
+
+    const actionsWrap = createCopyButton(content);
+    actionsWrap.appendChild(createSpeakerButton(content));
+    contentWrap.appendChild(actionsWrap);
+
+    div.appendChild(contentWrap);
+  } else {
+    div.appendChild(bubble);
   }
 
   messagesEl.appendChild(div);
@@ -629,30 +729,49 @@ function createCopyButton(textContent) {
 function typewriterMessage(text, provider = "gemini") {
   const div = document.createElement("div");
   div.className = "message ai";
- 
+
   const avatar = document.createElement("div");
   avatar.className = "avatar";
   avatar.textContent = "UL";
- 
+
+  // Naya column wrapper — bubble aur actions dono isi ke andar,
+  // taake actions HAMESHA bubble ke neeche hi rahein (row-flex ka hissa nahi)
+  const content = document.createElement("div");
+  content.className = "message-content";
+
   const bubble = document.createElement("div");
   bubble.className = "bubble";
- 
+
+  content.appendChild(bubble);
   div.appendChild(avatar);
-  div.appendChild(bubble);
+  div.appendChild(content);
   messagesEl.appendChild(div);
- 
+
   return new Promise(resolve => {
     currentTypewriterResolve = resolve;
     const words = text.split(/(\s+)/);
     let i = 0;
     const speed = 18;
- 
+
+    // Copy/Speaker/FAQ-badge — sab ek hi row mein, bubble ke neeche
+    function finalizeActions(fullText) {
+      const actionsWrap = createCopyButton(fullText);
+
+      if (provider === "faq_cache") {
+        const sourceBadge = document.createElement("span");
+        sourceBadge.className = "faq-source-badge";
+        sourceBadge.textContent = "Source: FAQs";
+        actionsWrap.insertBefore(sourceBadge, actionsWrap.firstChild);
+      }
+
+      actionsWrap.appendChild(createSpeakerButton(fullText));
+      content.appendChild(actionsWrap);
+    }
+
     function typeWord() {
       if (stopRequested) {
         bubble.innerHTML = formatText(words.slice(0, i).join(""));
-        const actionsWrap1 = createCopyButton(words.slice(0, i).join(""));
-        div.appendChild(actionsWrap1);
-        actionsWrap1.appendChild(createSpeakerButton(words.slice(0, i).join("")));
+        finalizeActions(words.slice(0, i).join(""));
         currentTypewriterResolve = null;
         resolve();
         return;
@@ -665,19 +784,7 @@ function typewriterMessage(text, provider = "gemini") {
         setTimeout(typeWord, speed);
       } else {
         bubble.innerHTML = formatText(text);
-
-        // FAQ source badge
-        if (provider === "faq_cache") {
-          const sourceBadge = document.createElement("div");
-          sourceBadge.className = "faq-source-badge";
-          sourceBadge.textContent = "Source: FAQs";
-          bubble.appendChild(sourceBadge);
-        }
-
-        const actionsWrap2 = createCopyButton(text);
-        div.appendChild(actionsWrap2);
-        actionsWrap2.appendChild(createSpeakerButton(text));
-
+        finalizeActions(text);
         currentTypewriterResolve = null;
         resolve();
       }
@@ -1018,7 +1125,7 @@ async function callGeminiAPI(messages) {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, deviceId: getDeviceId() })
+    body: JSON.stringify({ messages, userName, deviceId: getDeviceId() })
   });
 
   const data = await parseJsonSafely(response);

@@ -1,3 +1,4 @@
+// app.js
 // ============================================================
 // DEVICE ID - CONFIGURATION
 // ============================================================
@@ -17,7 +18,6 @@ function getDeviceId() {
 const CONFIG = {
   maxTokens: 1024,
 };
-
 
 // ===== STATE =====
 let chatSessions = [];
@@ -119,8 +119,7 @@ function showPhoneHome() {
 }
 
 function openPhoneApp(appName) {
-  // Settings/About already have their own polished modals — reuse them directly,
-  // close the phone so they don't stack on top of it.
+  // Settings/About already have their own polished modals
   if (appName === "settings" || appName === "about") {
     feedbackModal.classList.remove("open");
     settingsModal.classList.add("open");
@@ -449,7 +448,7 @@ function updateWelcomeGreeting() {
     { before: "Welcome back, ",    name: userName, after: "! 👋" },
     { before: "Hello ",            name: userName, after: ", kya poochna hai? 🎓" },
     { before: "Aaj main aapki kya madad kar sakta hoon, ", name: userName, after: "?" },
-    { before: "Whats your plan, ", name: userName, after: "?" },
+    { before: "What's your plan, ", name: userName, after: "?" },
   ];
   const g = greetings[Math.floor(Math.random() * greetings.length)];
   const fullText = g.before + g.name + g.after;

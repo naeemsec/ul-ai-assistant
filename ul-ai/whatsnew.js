@@ -4,6 +4,12 @@
 // version: jo bhi tag dikhana ho (e.g. "v1.2.0")
 const WHATS_NEW_ITEMS = [
   {
+    badge: "Fixed",
+    version: "v1.5.1",
+    title: "Feedback Email System Fix",
+    desc: "Couldn't send you Feedback error has been solved. Share your feedback, thought.",
+  },
+  {
     badge: "New",
     version: "v1.5.0",
     title: "Feedback, now in your pocket",

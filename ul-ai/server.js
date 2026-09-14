@@ -5,6 +5,7 @@ const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const rateLimit = require("express-rate-limit")
+const nodemailer = require("nodemailer");
 
 const app = express();
 
@@ -13,10 +14,7 @@ app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 // ===== ERROR SANITIZATION (security) =====
-// Production mein raw internal error details (Google/Groq ke exact error strings,
-// model names, internal structure) kabhi bhi client ko network response mein nahi
-// jane chahiye — ye ek attacker ko system ke internals ka clue de sakte hain.
-// Development/Beta mein poora detail milta hai taake debugging aasan ho.
+// Production mein raw internal error details (Google/Groq ke exact error)
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 function sanitizeError(rawMessage) {
   if (IS_PRODUCTION) {
@@ -281,138 +279,63 @@ function saveUsageToFile() {
 // ============================================================
 // FEEDBACK SYSTEM (5-star rating + bug/feature/general messages)
 // ============================================================
-const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
-const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
-const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
-const FEEDBACK_EMAIL_USER = process.env.FEEDBACK_EMAIL_USER;
-const FEEDBACK_EMAIL_TO = process.env.FEEDBACK_EMAIL_TO || FEEDBACK_EMAIL_USER;
-
-if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
-  console.error("⚠️ Gmail API credentials .env mein nahi mili — feedback emails nahi bhej payenge.");
-}
-
-async function getGmailAccessToken() {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: GMAIL_CLIENT_ID,
-      client_secret: GMAIL_CLIENT_SECRET,
-      refresh_token: GMAIL_REFRESH_TOKEN,
-      grant_type: "refresh_token",
-    }),
+let cachedTransporter = null;
+function getTransporter() {
+  if (cachedTransporter) return cachedTransporter;
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) throw new Error("GMAIL_USER / GMAIL_APP_PASSWORD not configured");
+  cachedTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error_description || "Failed to get Gmail access token");
-  return data.access_token;
-}
-
-function base64UrlEncode(str) {
-  return Buffer.from(str).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function encodeMimeHeader(str) {
-  return `=?UTF-8?B?${Buffer.from(str, "utf-8").toString("base64")}?=`;
+  return cachedTransporter;
 }
 
 async function sendFeedbackEmail(entry) {
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
-    throw new Error("Email not configured on server.");
-  }
-
+  const transporter = getTransporter();
   const categoryLabel = { general: "💬 General Feedback", bug: "🐛 Bug Report", feature: "✨ Feature Request" };
   const stars = "★".repeat(entry.rating) + "☆".repeat(5 - entry.rating);
-  const subject = `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`;
-  const bodyText = `Rating: ${stars} (${entry.rating}/5)
+
+  await transporter.sendMail({
+    from: `"UL AI Feedback" <${process.env.GMAIL_USER}>`,
+    to: process.env.FEEDBACK_EMAIL_TO || process.env.GMAIL_USER,
+    subject: `${categoryLabel[entry.category]} — ${entry.rating}/5 stars`,
+    text: `Rating: ${stars} (${entry.rating}/5)
 Category: ${categoryLabel[entry.category]}
 ${entry.name ? `Name: ${entry.name}\n` : ""}Time: ${new Date(entry.timestamp).toLocaleString()}
 Device: ${entry.deviceId || "unknown"}
 
 Message:
-${entry.message || "(no message provided)"}`;
-
-  const rawMessage = [
-    `From: "UL AI Feedback" <${FEEDBACK_EMAIL_USER}>`,
-    `To: ${FEEDBACK_EMAIL_TO}`,
-    `Subject: ${encodeMimeHeader(subject)}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    "",
-    bodyText,
-  ].join("\n");
-
-  const accessToken = await getGmailAccessToken();
-
-  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ raw: base64UrlEncode(rawMessage) }),
+${entry.message || "(no message provided)"}`,
   });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error?.message || `Gmail API Error ${response.status}`);
-  }
 }
 
 // ============================================================
-// ERROR ALERT EMAIL — jab bhi koi unexpected server error aaye (jo
-// user ko "Internal Issue / Boss Naeem" wala generic message dikhata
-// hai), Boss ko turant email chali jaye — pooora dev-info ke sath
-// (jo production mein user ko kabhi nahi dikhta).
+// ERROR ALERT EMAIL 
 // ============================================================
-// Simple cooldown — agar koi bug baar baar trigger ho raha ho (jaise
-// koi loop mein fail ho raha ho), to Boss ka inbox spam na ho.
 const ERROR_ALERT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minute
 let lastErrorAlertSentAt = 0;
 
 async function sendErrorAlertEmail({ endpoint, errorMessage, deviceId }) {
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
-    return; // Email configure nahi hai — chup chaap skip karo, user experience block nahi honi chahiye
-  }
-
   const now = Date.now();
-  if (now - lastErrorAlertSentAt < ERROR_ALERT_COOLDOWN_MS) {
-    console.log("[Error Alert] Cooldown active — email skip ki gayi (console log dekh lein).");
-    return;
-  }
+  if (now - lastErrorAlertSentAt < ERROR_ALERT_COOLDOWN_MS) return;
   lastErrorAlertSentAt = now;
 
   try {
-    const subject = `🚨 UL AI Server Error — ${endpoint}`;
-    const bodyText = `An internal server error occurred on UL AI.
-
-Endpoint: ${endpoint}
+    const transporter = getTransporter();
+    await transporter.sendMail({
+      from: `"UL AI Alerts" <${process.env.GMAIL_USER}>`,
+      to: process.env.FEEDBACK_EMAIL_TO || process.env.GMAIL_USER,
+      subject: `🚨 UL AI Server Error — ${endpoint}`,
+      text: `Endpoint: ${endpoint}
 Time: ${new Date().toLocaleString()}
-Device ID: ${deviceId || "unknown"}
+Device: ${deviceId || "unknown"}
 
---- Dev Info (raw error, users never see this) ---
-${errorMessage}`;
-
-    const rawMessage = [
-      `From: "UL AI Alerts" <${FEEDBACK_EMAIL_USER}>`,
-      `To: ${FEEDBACK_EMAIL_TO}`,
-      `Subject: ${encodeMimeHeader(subject)}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      "",
-      bodyText,
-    ].join("\n");
-
-    const accessToken = await getGmailAccessToken();
-
-    await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ raw: base64UrlEncode(rawMessage) }),
+--- Error ---
+${errorMessage}`,
     });
   } catch (emailErr) {
-    // Ye fail bhi ho jaye to koi masla nahi — user ko normal error message hi milega,
-    // bas Boss ko extra alert nahi milegi is dafa.
     console.error("[Error Alert Email Failed]", emailErr);
   }
 }
@@ -442,7 +365,7 @@ function getUsageSnapshot() {
 }
 
 // ============================================================
-// PAST PAPERS — Google Drive API, folder hi index hai (koi manual JSON nahi)
+// PAST PAPERS 
 // ============================================================
 const DRIVE_API_KEY = process.env.DRIVE_API_KEY;
 const DRIVE_ROOT_FOLDER_ID = process.env.DRIVE_ROOT_FOLDER_ID;
@@ -549,7 +472,6 @@ app.get("/api/papers/list", async (req, res) => {
 
 // ============================================================
 // GEMINI / GROQ ki RPD/RPM tracking ab dono keyPool.js (geminiPool, groqPool)
-// ke andar per-key handle hoti hai — is se upar dekhein.
 // ============================================================
 
 let fallbackNotifiedDatePT = null;
@@ -564,7 +486,6 @@ function shouldNotifyFallback() {
 }
 
 // ===== GROQ BACKUP CALL (multi-key pool ke sath) =====
-// groqKeyEntry = geminiPool jaisa ek { key, label, ... } object jo groqPool se milta hai.
 async function callGroqChat(messages, userName, groqKeyEntry) {
   const userNameNote = userName
     ? `\n\nCURRENT USER INFO:\n- User ka naam: ${userName}\n- Responses mein kabhi kabhi unhe "${userName}" keh kar address karo — especially jab koi naya topic start ho, koi important info do, ya koi warm/encouraging baat ho. Har message mein naam lena zaroori nahi — sirf jab natural lage.`
@@ -640,7 +561,6 @@ app.use(express.static(path.join(__dirname)));
  
 // ===== PER-IP RATE LIMITING (taake ek user spam kare to sab ke liye quota khatam na ho) =====
 // ===== RATE LIMIT KEY =====
-// Login system nahi hai, isliye frontend ek anonymous deviceId (localStorage mein) generate
 function getRateLimitKey(req) {
   const id = req.body?.deviceId;
   if (typeof id === "string" && id.length > 0 && id.length <= 100) {

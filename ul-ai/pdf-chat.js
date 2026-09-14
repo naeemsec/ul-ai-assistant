@@ -106,6 +106,7 @@ function enterPdfChatMode() {
   if (typeof exitMeritListMode === "function") exitMeritListMode();
 
   pdfChatMode = true;
+  if (typeof exitPastPaperMode === "function") exitPastPaperMode();
   clearMessages();
   showWelcome(false);
 

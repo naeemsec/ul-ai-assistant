@@ -69,6 +69,12 @@ function exitPastPaperMode() {
   pastPaperScreen.classList.add("hidden");
   document.body.classList.remove("past-paper-mode");
   if (pastPaperBtn) pastPaperBtn.classList.remove("active");
+  // Paper preview and list reset
+  if (paperListArea) paperListArea.innerHTML = "";
+  if (paperPreviewArea) {
+    paperPreviewArea.classList.add("hidden");
+    paperPreviewArea.innerHTML = "";
+  }
 }
 
 // ===== LOAD PROGRAMS DROPDOWN =====

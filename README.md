@@ -59,6 +59,7 @@ ul-ai-assistant/
 ├── ul-ai/
 │   ├── assets/            # Logo and static assets
 │   ├── index.html         # Application structure
+│   ├── 500.html           # Custom Error Screen
 │   ├── style.css          # Styling and themes
 |   ├── app.js             # Web Logic
 |   ├── server.js          # Backend server (API logic)

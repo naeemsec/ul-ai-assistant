@@ -8,6 +8,8 @@ node_modules/
 *.log
 npm-debug.log*
 token-usage.json
+particles-backup.html
+particles.html
 
 # OS files
 .DS_Store

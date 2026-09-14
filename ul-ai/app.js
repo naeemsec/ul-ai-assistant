@@ -757,13 +757,6 @@ function typewriterMessage(text, provider = "gemini") {
     function finalizeActions(fullText) {
       const actionsWrap = createCopyButton(fullText);
 
-      if (provider === "faq_cache") {
-        const sourceBadge = document.createElement("span");
-        sourceBadge.className = "faq-source-badge";
-        sourceBadge.textContent = "Source: FAQs";
-        actionsWrap.insertBefore(sourceBadge, actionsWrap.firstChild);
-      }
-
       actionsWrap.appendChild(createSpeakerButton(fullText));
       content.appendChild(actionsWrap);
     }

@@ -22,8 +22,12 @@ function sanitizeError(rawMessage) {
   }
   return rawMessage;
 }
+
+// ==================================
+// LOad data from other files
+// ==================================
 const KeyPool = require("./keyPool");
-const { UNIVERSITY_CONTEXT, FEE_CONTEXT, PDF_CHAT_SYSTEM_PROMPT } = require("./contexts");
+const { UNIVERSITY_CONTEXT, FEE_CONTEXT, PDF_CHAT_SYSTEM_PROMPT, STUDENT_LOOKUP_CONTEXT } = require("./contexts");
 
 const PDF_API_KEY = process.env.PDF_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -214,7 +218,162 @@ IMPORTANT: If a student wants to search for their own name/result, do NOT try to
   }
 }
 
+// ============================================================
+// RECENT UPDATES / TOP STORIES — LIVE DATA (ul.edu.pk homepage)
+// ============================================================
+const HOMEPAGE_URL = "https://ul.edu.pk";
+const STORIES_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minute cache
+
+let storiesCache = { data: null, fetchedAt: 0 };
+
+async function fetchTopStories() {
+  const now = Date.now();
+  if (storiesCache.data && now - storiesCache.fetchedAt < STORIES_CACHE_TTL_MS) {
+    return storiesCache.data;
+  }
+
+  const response = await fetch(HOMEPAGE_URL);
+  if (!response.ok) throw new Error(`Homepage fetch failed: ${response.status}`);
+  const html = await response.text();
+  const $ = cheerio.load(html);
+
+  const stories = [];
+  $(".story-card-modern").each((_, el) => {
+    const title = $(el).find(".story-title-modern a").text().trim();
+    const link = $(el).find(".story-title-modern a").attr("href") || "";
+    const description = $(el).find(".story-desc-modern").text().trim().replace(/\s+/g, " ");
+
+    if (title) {
+      stories.push({ title, link, description });
+    }
+  });
+
+  storiesCache = { data: stories, fetchedAt: now };
+  return stories;
+}
+
+// Keywords se detect karte hain ke sawal "recent updates/news" ke baare mein hai
+const UPDATES_KEYWORDS = [
+  "recent update", "recent updates", "latest update", "latest news", "what's new",
+  "whats new", "ul mein kya", "kya ho raha", "kya chal raha", "naya kya", "recent news",
+  "top stories", "latest happening",
+];
+
+function isRecentUpdatesQuery(messages) {
+  const recentText = messages.slice(-4).map((m) => m.content).join(" ").toLowerCase();
+  return UPDATES_KEYWORDS.some((keyword) => recentText.includes(keyword));
+}
+
+// Live stories ko AI ke context ke liye readable summary mein badalte hain
+async function buildRecentUpdatesContext() {
+  try {
+    const stories = await fetchTopStories();
+    if (stories.length === 0) {
+      return `\n\nLIVE RECENT UPDATES (fetched just now from ul.edu.pk): No stories currently listed on the homepage.`;
+    }
+
+    const summary = stories
+      .slice(0, 6)
+      .map((s, i) => `${i + 1}. ${s.title} — ${s.description}${s.link ? ` (${s.link})` : ""}`)
+      .join("\n");
+
+    return `\n\nLIVE RECENT UPDATES / TOP STORIES (fetched just now from ul.edu.pk homepage — this is REAL, current data. Answer directly and confidently from it. Never say you don't have access to live updates):
+${summary}`;
+  } catch (err) {
+    console.error("[Recent Updates Context Error]", err);
+    return `\n\nLIVE RECENT UPDATES: Could not reach ul.edu.pk right now. Tell the student to check https://ul.edu.pk directly, or try again in a moment.`;
+  }
+}
+
+// ============================================================
+// ===== STUDENT LOOKUP (ul.edu.pk/challan se live data) =====
+// ============================================================
+const CHALLAN_PAGE_URL = "https://ul.edu.pk/challan";
+const CHALLAN_VALIDATE_URL = "https://ul.edu.pk/challan/validate-student";
+
+async function lookupStudent(roll_no) {
+  const pageRes = await fetch(CHALLAN_PAGE_URL, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.5",
+    }
+  });
+  if (!pageRes.ok) throw new Error("Could not reach ul.edu.pk");
+
+  const pageHtml = await pageRes.text();
+  const rawCookies = pageRes.headers.getSetCookie
+    ? pageRes.headers.getSetCookie()
+    : [pageRes.headers.get("set-cookie") || ""];
+  const cookieStr = rawCookies.map(c => c.split(";")[0].trim()).filter(Boolean).join("; ");
+
+  const $page = cheerio.load(pageHtml);
+  const token = $page('meta[name="csrf-token"]').attr("content")
+             || $page('input[name="_token"]').val();
+
+  if (!token) throw new Error("Could not get CSRF token");
+
+  const validateRes = await fetch(CHALLAN_VALIDATE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-CSRF-TOKEN": token,
+      "X-Requested-With": "XMLHttpRequest",
+      "Referer": CHALLAN_PAGE_URL,
+      "Origin": "https://ul.edu.pk",
+      "Cookie": cookieStr,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    body: JSON.stringify({ _token: token, roll_no: roll_no.trim() }),
+  });
+
+  const data = await validateRes.json();
+  if (!data.success || !data.student) return null;
+
+  const s = data.student;
+  return {
+    name:        s.name        || "—",
+    father_name: s.father_name || "—",
+    roll_no:     s.roll_no     || "—",
+    program:     s.program     || "—",
+    session:     s.session     || "—",
+    semester:    s.semester    || "—",
+    shift:       s.shift       || "—",
+  };
+}
+
+app.post("/api/student-lookup", express.json(), async (req, res) => {
+  try {
+    const roll_no = req.body?.roll_no;
+    if (!roll_no || roll_no.trim().length < 3) {
+      return res.status(400).json({ error: "Please enter a valid Roll No, Registration No, or CNIC." });
+    }
+    const student = await lookupStudent(roll_no);
+    if (!student) return res.status(404).json({ error: "No student found. Please check your Roll No / CNIC." });
+    res.json({ found: true, student });
+  } catch (err) {
+    console.error("[Student Lookup Error]", err);
+    res.status(500).json({ error: sanitizeError(err.message || "Lookup failed.") });
+  }
+});
+
+const STUDENT_LOOKUP_KEYWORDS = [
+  "student info", "student details", "roll no", "roll number", "registration number",
+  "reg no", "cnic check", "student ka naam", "kis program mein", "kon sa semester",
+  "meri info", "mera record", "apni info", "apna record", "check karo", "lookup"
+];
+
+function isStudentLookupQuery(messages) {
+  // Sirf last user message check karo — history mein purane identifiers ignore karo
+  const lastMsg = messages[messages.length - 1]?.content || "";
+  const hasKeyword = STUDENT_LOOKUP_KEYWORDS.some(k => lastMsg.toLowerCase().includes(k));
+  const hasIdentifier = /\b[A-Z]{2,8}-[A-Z]-\d{2}-\d+\b|\b\d{5}-\d{7}-\d+\b/i.test(lastMsg);
+  return hasKeyword || hasIdentifier;
+}
+// ============================================================
 // ===== QUOTA RESET TIME CALCULATOR =====
+// ============================================================
 function getQuotaResetTime() {
   const now = new Date();
  
@@ -492,13 +651,14 @@ async function callGroqChat(messages, userName, groqKeyEntry) {
     : "";
   const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
   const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
+  const updatesContext = isRecentUpdatesQuery(messages) ? await buildRecentUpdatesContext() : "";
 
   async function attemptGroqCall(historyLimit) {
     // Sirf instantly jawab dena hai, isliye sirf recent messages bhejte hain last conversation nhi.
     const trimmedMessages = messages.slice(-historyLimit);
 
     const groqMessages = [
-      { role: "system", content: UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote },
+      { role: "system", content: UNIVERSITY_CONTEXT + feeContext + meritContext + updatesContext + userNameNote },
       ...trimmedMessages.map((m) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.content,
@@ -609,7 +769,9 @@ const feedbackLimiter = rateLimit({
   },
 });
 
+// ============================================================
 // ===== CHAT ENDPOINT =====
+// ============================================================
 app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
   try {
     const { messages, userName } = req.body;
@@ -634,7 +796,44 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
       : "";
     const feeContext = isFeeRelatedQuery(messages) ? "\n\n" + FEE_CONTEXT : "";
     const meritContext = isMeritListQuery(messages) ? await buildMeritListContext() : "";
-    const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + userNameNote;
+    const updatesContext = isRecentUpdatesQuery(messages) ? await buildRecentUpdatesContext() : "";
+    
+    let studentContext = "";
+    if (isStudentLookupQuery(messages)) {
+      const lastUserMsg = messages[messages.length - 1].content;
+      // Roll no / CNIC / Reg no extract karne ki koshish
+      //const match = lastUserMsg.match(/\b[A-Z]{2,8}-[A-Z]-\d{2}-\d+\b|\b\d{5}-\d{7}-\d\b/i);
+      const match = lastUserMsg.match(/\b[A-Z]{2,8}-[A-Z]-\d{2}-\d+\b|\b\d{5}-\d{7}-\d+\b/i);
+      if (match) {
+        try {
+          const student = await lookupStudent(match[0]);
+          if (student) {
+            const s = student;
+            studentContext = `\n\nSTUDENT LOOKUP RESULT (FRESH live lookup from ul.edu.pk just now — ignore any previous student data in conversation history, show ONLY this new result as a table):
+              | Field | Value |
+              |-------|-------|
+              | Name | ${s.name} |
+              | Father Name | ${s.father_name} |
+              | Roll No | ${s.roll_no} |
+              | Program | ${s.program} |
+              | Session | ${s.session} |
+              | Semester | ${s.semester} |
+              | Shift | ${s.shift} |
+
+            Show this table to the user and confirm the student details.`;
+          } else {
+            studentContext = `\n\nSTUDENT LOOKUP RESULT: No student found with "${match[0]}". Tell the user to double-check their Roll No / Registration No / CNIC.`;
+          }
+        } catch (e) {
+          console.error("[Student Lookup in Chat]", e);
+          studentContext = `\n\nSTUDENT LOOKUP: Lookup failed due to a technical issue. Tell the user to try again.`;
+        }
+      } else {
+        studentContext = `\n\nSTUDENT LOOKUP: User wants to check student info. Ask them to provide their Roll No (e.g. BSCSM-B-25-40), Registration No, or CNIC number so you can look it up.`;
+      }
+    }
+
+    const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + updatesContext + studentContext + STUDENT_LOOKUP_CONTEXT + userNameNote;
 
     async function attemptGemini(keyEntry) {
       geminiPool.recordAttempt(keyEntry);

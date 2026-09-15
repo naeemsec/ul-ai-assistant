@@ -384,7 +384,10 @@ function showNameDialog() {
   overlay.className = "modal-overlay open";
   overlay.innerHTML = `
     <div class="modal" style="max-width:380px">
-      <div class="modal-header">
+      <div class="modal-header" style="justify-content:flex-start;gap:12px">
+        <button type="button" class="modal-close" id="cancelNameBtn" aria-label="Go back without saving" title="Back" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7M5 12h14" /></svg>
+        </button>
         <div class="modal-title">👋 Welcome to UL AI</div>
       </div>
       <div class="modal-body" style="padding:24px 20px">
@@ -397,10 +400,13 @@ function showNameDialog() {
           class="setting-input" 
           placeholder="Enter your name here..." 
           maxlength="30"
+          aria-label="Your name"
+          aria-describedby="nameError"
           style="margin-bottom:16px"
           autofocus
         />
-        <button class="save-btn" id="saveNameBtn" style="width:100%">Start Session→</button>
+        <p id="nameError" role="alert" style="margin:0 0 16px;padding:10px 12px;color:#ef4444;background:rgba(239,68,68,0.1);border:1px solid currentColor;border-radius:8px;font-size:14px;font-weight:600;line-height:1.5" hidden></p>
+        <button class="save-btn" id="saveNameBtn" style="width:100%">${userName ? "Update Name" : "Start Session→"}</button>
       </div>
     </div>
   `;
@@ -408,27 +414,46 @@ function showNameDialog() {
 
   const input = document.getElementById("nameInput");
   const btn = document.getElementById("saveNameBtn");
+  const error = document.getElementById("nameError");
+  const previousFocus = document.activeElement;
+  input.value = userName;
+
+  function closeDialog() {
+    overlay.remove();
+    previousFocus?.focus();
+  }
 
   function saveName() {
-    const name = input.value.trim();
-    if (!name) {
-      input.style.borderColor = "var(--accent)";
-      input.placeholder = "Naam zaroor likhein!";
+    const name = input.value.normalize("NFC").trim().replace(/ +/g, " ");
+    if (!name || name.length > 30 || !/^(?:\p{L}\p{M}*)+(?: (?:\p{L}\p{M}*)+)*$/u.test(name)) {
+      input.style.borderColor = "#ef4444";
+      input.setAttribute("aria-invalid", "true");
+      error.textContent = "Enter your name using only letters and spaces (maximum 30 characters). Numbers and symbols are not allowed.";
+      error.hidden = false;
       input.focus();
       return;
     }
     userName = name;
     localStorage.setItem("ul_ai_username", name);
-    overlay.remove();
+    closeDialog();
     updateWelcomeGreeting();
     updateUserBadge();
   }
 
   btn.addEventListener("click", saveName);
+  document.getElementById("cancelNameBtn").addEventListener("click", closeDialog);
+  overlay.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDialog();
+  });
+  input.addEventListener("input", () => {
+    input.style.borderColor = "";
+    input.removeAttribute("aria-invalid");
+    error.hidden = true;
+  });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") saveName();
   });
-  setTimeout(() => input.focus(), 100);
+  setTimeout(() => { if (overlay.isConnected) input.focus(); }, 100);
 }
 
 function updateWelcomeGreeting() {

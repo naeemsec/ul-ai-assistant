@@ -835,7 +835,7 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
 
     const contextWithName = UNIVERSITY_CONTEXT + feeContext + meritContext + updatesContext + studentContext + STUDENT_LOOKUP_CONTEXT + userNameNote;
 
-    async function attemptGemini(keyEntry) {
+        async function attemptGemini(keyEntry) {
       geminiPool.recordAttempt(keyEntry);
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${keyEntry.key}`;
@@ -854,13 +854,26 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
       if (!response.ok) {
         console.error(`[Gemini Error - ${keyEntry.label}]`, data);
         const msg = data.error?.message || `API Error ${response.status}`;
+        const lowerMsg = msg.toLowerCase();
+
         const isQuotaError =
           response.status === 429 ||
-          msg.toLowerCase().includes("quota") ||
-          msg.toLowerCase().includes("rate limit");
+          lowerMsg.includes("quota") ||
+          lowerMsg.includes("rate limit");
+
+        // NAYA — 503/temporary-overload bhi "agli key try karo" wale
+        // list mein shamil, lekin quota ki tarah pura din exhausted
+        // mark nahi karte (ye key ka fault nahi, model hi busy tha)
+        const isTransientError =
+          response.status === 503 ||
+          response.status === 500 ||
+          lowerMsg.includes("unavailable") ||
+          lowerMsg.includes("overloaded") ||
+          lowerMsg.includes("high demand");
 
         const err = new Error(msg);
         err.quotaExceeded = isQuotaError;
+        err.transient = isTransientError;
         throw err;
       }
 
@@ -885,6 +898,13 @@ app.post("/api/chat", minuteLimiter, dailyLimiter, async (req, res) => {
           geminiPool.markExhausted(geminiKeyEntry);
           geminiKeyEntry = geminiPool.getNextAvailableKey(geminiKeyEntry.label);
           continue; // agli key try karo
+        }
+        // NAYA — transient (503/overload) pe bhi agli key try karo,
+        // lekin key ko permanently exhausted mark nahi karte
+        if (err.transient) {
+          console.warn(`[Fallback] ${geminiKeyEntry.label} temporarily unavailable (503) — agli key try ho rahi hai.`);
+          geminiKeyEntry = geminiPool.getNextAvailableKey(geminiKeyEntry.label);
+          continue;
         }
         throw err; // koi aur (non-quota) error — seedha upar throw karo
       }
